@@ -63,7 +63,6 @@ module.exports = {
                             }
 
                             const with_text = `https://api.streamelements.com/kappa/v2/speech?voice=Maxim&text=${encodeURIComponent(text)}`;
-                            console.log(with_text);
                             const warning = `https://api.streamelements.com/kappa/v2/speech?voice=Maxim&text=${encodeURIComponent('Недостаточно данных для генерации...\nНапишите что-нибудь в чат')}`;
 
                             const streamURL = (text_lines >= 1) ? with_text : warning;
@@ -77,10 +76,8 @@ module.exports = {
 
                                 const audioPlayer = new voice.AudioPlayer();
                                 const subscription = connection.subscribe(audioPlayer);
-                                console.log(audioResource);
 
                                 if (subscription) {
-                                    console.log("Attempting to play sound");
                                     audioPlayer.play(audioResource);
                                     setTimeout(() => subscription.unsubscribe(), 5_000);
                                 }
@@ -114,7 +111,7 @@ module.exports = {
                 }
                 
             } catch (error) {
-                throw new error(error);
+                console.error(error);
             }
         }
     },
