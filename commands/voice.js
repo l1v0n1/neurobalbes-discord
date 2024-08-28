@@ -6,7 +6,7 @@ const { languages } = require('../assets/descriptions');
 const { getChat } = require('../database');
 const { choice, getLocale } = require('../functions');
 const Markov = require('../markov.js');
-const fetch = require('node-fetch'); // Ensure node-fetch is installed
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 module.exports = {
     data: new SlashCommandBuilder()
