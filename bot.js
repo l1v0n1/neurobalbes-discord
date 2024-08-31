@@ -1,7 +1,7 @@
 const { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const { token, bot_description, raw_limit } = require('./config.json');
 const { isURL, choice, randomInteger, range } = require('./functions');
