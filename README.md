@@ -16,15 +16,51 @@ Neurobalbes is an advanced Discord bot that uses Markov chains to generate messa
 - Efficient database management
 - Auto-recovery from disconnections
 
-### Requirements
-- Node.js >= 16.9.0
+### Prerequisites
+
+- Node.js v16.9.0 or higher
 - SQLite3
 - Discord Bot Token
+
+### Platform-Specific Requirements
+
+Before installing dependencies, make sure you have the following prerequisites installed for your operating system:
+
+#### Windows
+1. Install [Node.js](https://nodejs.org/) (v16.9.0 or higher)
+2. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+   - During installation, select "Desktop development with C++"
+   - This is required for compiling native modules
+
+#### macOS
+1. Install [Node.js](https://nodejs.org/) (v16.9.0 or higher)
+2. Install Xcode Command Line Tools:
+   ```bash
+   xcode-select --install
+   ```
+3. Install Opus (required for voice support):
+   ```bash
+   brew install opus
+   ```
+
+#### Linux (Ubuntu/Debian)
+1. Install Node.js (v16.9.0 or higher)
+2. Install required build tools and libraries:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install build-essential python3 libtool-bin
+   sudo apt-get install libopus-dev
+   ```
+
+After installing the prerequisites, run:
+```bash
+npm install
+```
 
 ### Installation
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/neurobalbes-discord.git
+git clone https://github.com/l1v0n1/neurobalbes-discord.git
 cd neurobalbes-discord
 ```
 
@@ -88,15 +124,51 @@ Neurobalbes - это продвинутый Discord бот, использующ
 - Эффективное управление базой данных
 - Автоматическое восстановление после отключений
 
-### Требования
-- Node.js >= 16.9.0
+### Предварительные требования
+
+- Node.js версии 16.9.0 или выше
 - SQLite3
-- Discord Bot Token
+- Токен Discord бота
+
+### Требования для разных платформ
+
+Перед установкой зависимостей убедитесь, что у вас установлены следующие компоненты для вашей операционной системы:
+
+#### Windows
+1. Установите [Node.js](https://nodejs.org/) (версии 16.9.0 или выше)
+2. Установите [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+   - Во время установки выберите "Разработка классических приложений на C++"
+   - Это необходимо для компиляции нативных модулей
+
+#### macOS
+1. Установите [Node.js](https://nodejs.org/) (версии 16.9.0 или выше)
+2. Установите инструменты командной строки Xcode:
+   ```bash
+   xcode-select --install
+   ```
+3. Установите Opus (необходим для поддержки голоса):
+   ```bash
+   brew install opus
+   ```
+
+#### Linux (Ubuntu/Debian)
+1. Установите Node.js (версии 16.9.0 или выше)
+2. Установите необходимые инструменты для сборки и библиотеки:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install build-essential python3 libtool-bin
+   sudo apt-get install libopus-dev
+   ```
+
+После установки предварительных требований выполните:
+```bash
+npm install
+```
 
 ### Установка
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/yourusername/neurobalbes-discord.git
+git clone https://github.com/l1v0n1/neurobalbes-discord.git
 cd neurobalbes-discord
 ```
 
