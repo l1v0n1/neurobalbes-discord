@@ -1,30 +1,145 @@
-# Neurobalbes-discord
-Eventually, Neurobalbes. A discord bot that generates it's messages based on yours
+# Neurobalbes Discord Bot
+
+[English](#english) | [Русский](#русский)
+
+## English
+
+### Overview
+Neurobalbes is an advanced Discord bot that uses Markov chains to generate messages based on server chat history. It learns from conversations and can generate contextually relevant responses.
+
+### Features
+- Message learning and generation using Markov chains
+- Multi-server support with sharding
+- Customizable response frequency
+- Support for images and attachments
+- Multiple language support
+- Efficient database management
+- Auto-recovery from disconnections
+
+### Requirements
+- Node.js >= 16.9.0
+- SQLite3
+- Discord Bot Token
+
+### Installation
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/neurobalbes-discord.git
+cd neurobalbes-discord
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Configure the bot:
+- Rename `config.example.json` to `config.json`
+- Add your Discord bot token and other settings
+
+4. Start the bot:
+```bash
+# Development mode
+npm run dev
+
+# Production mode
+npm start
+```
+
+### Configuration
+Edit `config.json` to customize:
+- Bot token
+- Bot description
+- Command prefix
+- Message limits
+- Admin settings
+
+### Commands
+- `/help` - Show available commands
+- `/language` - Change bot language
+- More commands available in the commands directory
+
+### Project Structure
+```
+neurobalbes-discord/
+├── src/
+│   ├── core/           # Core bot functionality
+│   ├── database/       # Database operations
+│   ├── utils/          # Utility functions
+│   └── commands/       # Bot commands
+├── assets/            # Static assets
+├── config.json        # Bot configuration
+└── package.json       # Project dependencies
+```
 
 ---
 
-### How to install & run the bot
-First of all, install node.js from their official website using their package managers. I tried using **vnm** and **fnm** on **Ubuntu 22.04** and **Debian 12** and I can gurantee that these are working configurations.
-After that, check that both node.js and npm are installed.
+## Русский
 
-> **Important note!** Node.js needs to be of version **v20.16.0** otherwise you will get a ton of errors later when installing dependencies 
+### Обзор
+Neurobalbes - это продвинутый Discord бот, использующий цепи Маркова для генерации сообщений на основе истории чата сервера. Он учится на основе разговоров и может генерировать контекстуально релевантные ответы.
 
-After installing everything, you can clone or download this repo, and in the directory of the project enter command `npm install` 
+### Возможности
+- Обучение и генерация сообщений с использованием цепей Маркова
+- Поддержка множества серверов с шардингом
+- Настраиваемая частота ответов
+- Поддержка изображений и вложений
+- Поддержка нескольких языков
+- Эффективное управление базой данных
+- Автоматическое восстановление после отключений
 
-Next, if you are on Debian/Ubuntu run this command to installed required build-dependencies: `sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config` and then run `npm rebuild canvas`
-When all dependencies are installed, please configure the bot in config.json, then run `node reg.js` to update slash commands, when they are finished updating run the bot via `node shard.js`
-Congrats, the bot should be running now!
+### Требования
+- Node.js >= 16.9.0
+- SQLite3
+- Discord Bot Token
 
+### Установка
+1. Клонируйте репозиторий:
+```bash
+git clone https://github.com/yourusername/neurobalbes-discord.git
+cd neurobalbes-discord
+```
 
-## How to install & run on Android?
+2. Установите зависимости:
+```bash
+npm install
+```
 
-why... okay.
+3. Настройте бота:
+- Переименуйте `config.example.json` в `config.json`
+- Добавьте токен вашего Discord бота и другие настройки
 
-For this you need termux and andronix(app in playmarket). I will not explain how to use it as there is enough information about it. After installing the OS you need to enter these commands in the terminal (using **Ubuntu** as an example):
-`apt intsall nodejs` and `apt install npm` Then go to Nodejs website to install the required version `20.16.0` then copy the command and paste it into the terminal. If everything works, then typing the command `node` in the terminal you will get this:
+4. Запустите бота:
+```bash
+# Режим разработки
+npm run dev
 
-> root@localhost:~# node
- Welcome to Node.js v20.16.0.
- Type ".help" for more information.
+# Продакшн режим
+npm start
+```
 
-It is not known what the result will be afterwards. most likely you will get VERY many errors.
+### Конфигурация
+Отредактируйте `config.json` для настройки:
+- Токена бота
+- Описания бота
+- Префикса команд
+- Лимитов сообщений
+- Настроек администратора
+
+### Команды
+- `/help` - Показать доступные команды
+- `/language` - Изменить язык бота
+- Дополнительные команды доступны в директории commands
+
+### Структура проекта
+```
+neurobalbes-discord/
+├── src/
+│   ├── core/           # Основной функционал бота
+│   ├── database/       # Операции с базой данных
+│   ├── utils/          # Вспомогательные функции
+│   └── commands/       # Команды бота
+├── assets/            # Статические ресурсы
+├── config.json        # Конфигурация бота
+└── package.json       # Зависимости проекта
+```

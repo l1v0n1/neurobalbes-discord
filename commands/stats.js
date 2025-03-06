@@ -35,7 +35,7 @@ module.exports = {
 					.addFields({ name: '**Сервер бота**', value: `[клик](${serverLink})` })
 					.addFields({ name: '**Добавить меня на сервер**', value: `[клик](${inviteLink})` });
 					
-					return interaction.editReply({ content: null, embeds: [Embed]}).catch(() => {/*Ignore error*/});
+					return interaction.editReply({embeds: [Embed]}).catch(() => {/*Ignore error*/});
 				})
 				.catch(console.error);
 			} else return await interaction.editReply("Access denied").catch(() => {/*Ignore error*/})

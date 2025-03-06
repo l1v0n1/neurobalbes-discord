@@ -1,0 +1,11 @@
+{
+    "token": "YOUR_BOT_TOKEN_HERE",
+    "bot_description": "Neurobalbes | /help",
+    "prefix": "/",
+    "clientId": "YOUR_CLIENT_ID_HERE",
+    "inviteLink": "YOUR_BOT_INVITE_LINK",
+    "serverLink": "YOUR_SUPPORT_SERVER_LINK",
+    "adminId": "YOUR_ADMIN_ID",
+    "site": "https://your-bot-website.com",
+    "raw_limit": 2000
+} 

@@ -50,7 +50,7 @@ module.exports = {
       const t1 = chain.generate_low(25);
       const t2 = chain.generate_low(30);
       const img = await demotivatorImage(attachment, t1, t2);
-      return await interaction.editReply({ content: null, files: [img] });
+      return await interaction.editReply({ files: [img] });
     }
 }
 };

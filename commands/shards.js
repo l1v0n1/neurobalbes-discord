@@ -21,7 +21,7 @@ module.exports = {
 				results.map((data) => {
 					embed.addFields({name: `📡 Shard ${data[0]}`, value: `**Status:** ${data[1]}\n**Ping:** ${data[2]}ms\n**Guilds:** ${data[3]}`})
 				});
-				return interaction.editReply({ content: null, embeds: [embed] }).catch(() => {/*Ignore error*/});
+				return interaction.editReply({ embeds: [embed] }).catch(() => {/*Ignore error*/});
 			})
 			.catch((error) => {
 				console.error(error);

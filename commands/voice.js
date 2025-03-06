@@ -1,12 +1,10 @@
-const voice = require('@discordjs/voice');
-const { join } = require('node:path');
+const voice = require('@discordjs/voice')
 const { SlashCommandBuilder } = require('discord.js');
 const { answers } = require('../assets/answers');
 const { languages } = require('../assets/descriptions');
-const { getChat } = require('../database');
+const { getChat } = require('../database')
 const { choice, getLocale } = require('../functions');
-const Markov = require('../markov.js');
-const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const Markov  = require('../markov.js')
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -62,27 +60,18 @@ module.exports = {
                                 text = chain.generate_low();
                             }
 
-                            const with_text = `https://api.streamelements.com/kappa/v2/speech?voice=Maxim&text=${encodeURIComponent(text)}`;
-                            const warning = `https://api.streamelements.com/kappa/v2/speech?voice=Maxim&text=${encodeURIComponent('Недостаточно данных для генерации...\nНапишите что-нибудь в чат')}`;
+                            const with_text = `https://api.streamelements.com/kappa/v2/speech?voice=${encodeURIComponent('Maxim')}&text=${encodeURIComponent(text)}`;
+                            const warning = `https://api.streamelements.com/kappa/v2/speech?voice=${encodeURIComponent('Maxim')}&text=${encodeURIComponent('Недостаточно данных для генерации...\nНапишите что-нибудь в чат')}`;
 
-                            const streamURL = (text_lines >= 1) ? with_text : warning;
-                            
-                            try {
-                                const response = await fetch(streamURL);
-                                if (!response.ok) throw new Error('Failed to fetch TTS audio');
-                                
-                                const audioStream = response.body;
-                                const audioResource = voice.createAudioResource(audioStream);
+                            const stream = (text_lines >= 1) ? with_text : warning;
+                            const audioResource = voice.createAudioResource(stream);
 
-                                const audioPlayer = new voice.AudioPlayer();
-                                const subscription = connection.subscribe(audioPlayer);
+                            const audioPlayer = new voice.AudioPlayer();
+                            const subscription = connection.subscribe(audioPlayer);
 
-                                if (subscription) {
-                                    audioPlayer.play(audioResource);
-                                    setTimeout(() => subscription.unsubscribe(), 5_000);
-                                }
-                            } catch (error) {
-                                console.error('Error fetching or playing TTS audio:', error);
+                            if (subscription) {
+                                audioPlayer.play(audioResource);
+                                setTimeout(() => subscription.unsubscribe(), 5_000);
                             }
                         }
                     }
@@ -103,13 +92,8 @@ module.exports = {
 
                 connection.destroy();
                 const member = interaction.guild.members.cache.get(interaction.user.id);
-                if (member.voice.channel == undefined){
-                    await interaction.editReply({ content: "Отключаюсь от чата" });
-                }
-                else {
-                    await interaction.editReply({ content: getLocale(answers, 'voice', 'disconnect', chat.lang, member.voice.channel?.name) });
-                }
                 
+                await interaction.editReply({ content: getLocale(answers, 'voice', 'disconnect', chat.lang, member.voice.channel?.name) });
             } catch (error) {
                 console.error(error);
             }
