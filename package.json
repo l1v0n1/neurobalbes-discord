@@ -24,7 +24,7 @@
     "ai",
     "chat"
   ],
-  "author": "Your Name",
+  "author": "l1v0n1",
   "license": "MIT",
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
