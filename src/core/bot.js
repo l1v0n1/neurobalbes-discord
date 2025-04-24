@@ -1,287 +1,629 @@
-const { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField } = require('discord.js');
-const fs = require('fs');
+const { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials } = require('discord.js');
+const { promises: fs } = require('fs/promises');
 const path = require('path');
 const fetch = require('node-fetch');
+const winston = require('winston');
 
-const { token, bot_description, raw_limit } = require('../../config.json');
+// Setup logging
+const logger = winston.createLogger({
+	level: process.env.LOG_LEVEL || 'info',
+	format: winston.format.combine(
+		winston.format.timestamp(),
+		winston.format.printf(({ level, message, timestamp }) => {
+			return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+		})
+	),
+	transports: [
+		new winston.transports.Console(),
+		new winston.transports.File({ 
+			filename: path.join('logs', 'bot-error.log'), 
+			level: 'error' 
+		}),
+		new winston.transports.File({ 
+			filename: path.join('logs', 'bot-combined.log')
+		})
+	]
+});
+
+// Setup shard info (ensure logs show correct shard)
+let shardInfo = process.env.SHARD_ID ? `[Shard ${process.env.SHARD_ID}]` : '';
+
+// Constants
+const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/;
+const MENTION_REGEX = /<@!?(\d+)>/g;
+const CACHE_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+const HEARTBEAT_INTERVAL = 30 * 1000; // 30 seconds
+
+// Safer config loading with defaults
+let config = {
+	token: process.env.BOT_TOKEN,
+	prefix: process.env.PREFIX || '/',
+	bot_description: process.env.BOT_DESCRIPTION || 'Neurobalbes | Type /help for commands',
+	clientId: process.env.CLIENT_ID,
+	raw_limit: parseInt(process.env.RAW_LIMIT || '2000', 10)
+};
+
+try {
+	const userConfig = require('../../config.json');
+	config = { ...config, ...userConfig };
+	logger.info(`${shardInfo} Configuration loaded from config.json`);
+} catch (error) {
+	logger.warn(`${shardInfo} Could not load config.json, using defaults and environment variables: ${error.message}`);
+}
+
 const { isURL, choice, randomInteger, range } = require('../utils/functions');
 const { getChat, updateText, insert, chatExists, deleteFirst } = require('../database/database');
 const Markov = require('../utils/markov');
 
-// Implement connection manager
+// Constants for better code readability
+const MAX_MESSAGE_LENGTH = 1000;
+const URL_PATTERNS = {
+	TENOR: 'https://tenor.com/view',
+	DISCORD_MEDIA: 'https://media.discordapp.net/',
+	GIF_EXTENSIONS: ['.gif', '-gif']
+};
+
+// Implement connection manager with better error handling
 class ConnectionManager {
-	constructor(client) {
-		this.client = client;
-		this.reconnectAttempts = 0;
-		this.maxReconnectAttempts = 5;
-		this.reconnectTimeout = 5000;
+	constructor() {
+		this.reconnectAttempt = 0;
+		this.reconnecting = false;
+		this.maxReconnectAttempts = 10;
+		this.baseReconnectDelay = 5000; // 5 seconds
 	}
 
-	async handleDisconnect(error) {
-		console.error('Disconnection detected:', error);
-		if (this.reconnectAttempts < this.maxReconnectAttempts) {
-			this.reconnectAttempts++;
-			console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-			
-			setTimeout(async () => {
-				try {
-					await this.client.login(token);
-					console.log('Reconnected successfully!');
-					this.reconnectAttempts = 0;
-				} catch (err) {
-					console.error('Reconnection failed:', err);
-					await this.handleDisconnect(err);
-				}
-			}, this.reconnectTimeout * this.reconnectAttempts);
+	async handleDisconnect(client, error) {
+		if (error) {
+			logger.error(`${shardInfo} Disconnected with error: ${error.message}`);
 		} else {
-			console.error('Max reconnection attempts reached. Please check the bot manually.');
-			process.exit(1);
+			logger.warn(`${shardInfo} Disconnected without error`);
 		}
+
+		if (this.reconnecting) {
+			logger.debug(`${shardInfo} Already attempting to reconnect...`);
+			return;
+		}
+
+		this.reconnecting = true;
+
+		if (this.reconnectAttempt < this.maxReconnectAttempts) {
+			// Exponential backoff with jitter
+			const delay = this.baseReconnectDelay * Math.pow(1.5, this.reconnectAttempt) + 
+				Math.floor(Math.random() * 2000);
+			
+			this.reconnectAttempt++;
+			
+			logger.info(`${shardInfo} Attempting to reconnect (${this.reconnectAttempt}/${this.maxReconnectAttempts}) in ${Math.floor(delay/1000)} seconds...`);
+			
+			setTimeout(() => {
+				logger.info(`${shardInfo} Reconnecting now...`);
+				
+				client.login(config.token)
+					.then(() => {
+						logger.info(`${shardInfo} Reconnected successfully`);
+						this.reconnecting = false;
+					})
+					.catch(err => {
+						logger.error(`${shardInfo} Failed to reconnect: ${err.message}`);
+						this.reconnecting = false;
+						this.handleDisconnect(client, err);
+					});
+			}, delay);
+		} else {
+			logger.error(`${shardInfo} Maximum reconnection attempts reached (${this.maxReconnectAttempts}). Giving up.`);
+			process.exit(1); // Exit for shard manager to restart this shard
+		}
+	}
+
+	resetReconnectCounter() {
+		if (this.reconnectAttempt > 0) {
+			logger.info(`${shardInfo} Connection stable, resetting reconnect counter from ${this.reconnectAttempt} to 0`);
+		}
+		this.reconnectAttempt = 0;
 	}
 }
 
-// Implement memory management
+// Implement memory management with optimized cache operations
 class MemoryManager {
 	constructor() {
 		this.messageCache = new Map();
-		this.cacheLimit = 1000;
-		this.cleanupInterval = 1800000; // 30 minutes
+		this.cacheHits = 0;
+		this.cacheMisses = 0;
+		this.cacheSize = 0;
+		this.lastCleanup = Date.now();
 	}
 
-	addToCache(guildId, message) {
+	trackMessage(message) {
+		// Don't cache messages with URLs, or messages from bots
+		if (message.author.bot || URL_REGEX.test(message.content)) {
+			return;
+		}
+		
+		const guildId = message.guild?.id || 'dm';
+		
 		if (!this.messageCache.has(guildId)) {
-			this.messageCache.set(guildId, []);
+			this.messageCache.set(guildId, new Map());
 		}
 		
-		const cache = this.messageCache.get(guildId);
-		cache.push(message);
+		const guildCache = this.messageCache.get(guildId);
 		
-		if (cache.length > this.cacheLimit) {
-			cache.shift();
+		// Use a sliding window approach - keep only the last 100 messages per channel
+		const channelId = message.channel.id;
+		
+		if (!guildCache.has(channelId)) {
+			guildCache.set(channelId, []);
 		}
+		
+		const channelMessages = guildCache.get(channelId);
+		
+		// Add message to cache
+		channelMessages.push({
+			id: message.id,
+			content: message.content,
+			author: message.author.id,
+			timestamp: Date.now(),
+			mentions: [...message.content.matchAll(MENTION_REGEX)].map(match => match[1])
+		});
+		
+		// Keep only last 100 messages
+		if (channelMessages.length > 100) {
+			channelMessages.shift();
+		}
+		
+		this.cacheSize++;
 	}
 
-	clearOldCache() {
+	getChannelHistory(guildId, channelId, limit = 50) {
+		const guildCache = this.messageCache.get(guildId || 'dm');
+		
+		if (!guildCache) {
+			this.cacheMisses++;
+			return [];
+		}
+		
+		const channelMessages = guildCache.get(channelId);
+		
+		if (!channelMessages) {
+			this.cacheMisses++;
+			return [];
+		}
+		
+		this.cacheHits++;
+		return channelMessages.slice(-limit);
+	}
+
+	cleanupCache() {
 		const now = Date.now();
-		this.messageCache.forEach((messages, guildId) => {
-			const filtered = messages.filter(msg => (now - msg.timestamp) < this.cleanupInterval);
-			if (filtered.length === 0) {
+		let deletedCount = 0;
+		
+		// Only clean up every 30 minutes
+		if (now - this.lastCleanup < CACHE_CLEANUP_INTERVAL) {
+			return;
+		}
+		
+		logger.info(`${shardInfo} Running cache cleanup...`);
+		
+		this.messageCache.forEach((guildCache, guildId) => {
+			guildCache.forEach((channelMessages, channelId) => {
+				const initialLength = channelMessages.length;
+				
+				// Remove messages older than 24 hours
+				const oldestAllowed = now - (24 * 60 * 60 * 1000);
+				
+				const newMessages = channelMessages.filter(msg => msg.timestamp >= oldestAllowed);
+				const removed = initialLength - newMessages.length;
+				
+				deletedCount += removed;
+				
+				if (newMessages.length === 0) {
+					// No messages left in this channel, remove the channel entry
+					guildCache.delete(channelId);
+				} else {
+					guildCache.set(channelId, newMessages);
+				}
+			});
+			
+			// If no channels left in this guild, remove the guild entry
+			if (guildCache.size === 0) {
 				this.messageCache.delete(guildId);
-			} else {
-				this.messageCache.set(guildId, filtered);
 			}
 		});
+		
+		this.lastCleanup = now;
+		this.cacheSize -= deletedCount;
+		
+		logger.info(`${shardInfo} Cache cleanup complete. Removed ${deletedCount} messages, current size: ${this.cacheSize} entries`);
+	}
+
+	getCacheStats() {
+		return {
+			guilds: this.messageCache.size,
+			channels: Array.from(this.messageCache.values()).reduce((sum, guild) => sum + guild.size, 0),
+			messages: this.cacheSize,
+			hits: this.cacheHits,
+			misses: this.cacheMisses,
+			hitRatio: this.cacheHits + this.cacheMisses > 0 ? 
+				Math.round((this.cacheHits / (this.cacheHits + this.cacheMisses)) * 100) : 0
+		};
 	}
 }
 
+// Initialize Discord client with optimized options
 const client = new Client({
 	intents: [
 		GatewayIntentBits.Guilds,
 		GatewayIntentBits.MessageContent,
 		GatewayIntentBits.GuildMessages,
-		GatewayIntentBits.GuildVoiceStates
+		GatewayIntentBits.GuildVoiceStates,
+		GatewayIntentBits.DirectMessages
 	],
 	presence: {
 		activities: [{
-			type: 0,
-			name: bot_description
+			type: ActivityType.Playing,
+			name: config.bot_description
 		}]
 	},
-	// Add better connection options
 	failIfNotExists: false,
 	retryLimit: 5,
 	ws: {
 		large_threshold: 250,
 		compress: true
-	}
+	},
+	// Better gateway options
+	restTimeOffset: 750,
+	restGlobalRateLimit: 50,
+	partials: [
+		Partials.Channel,
+		Partials.Message
+	]
 });
 
-const connectionManager = new ConnectionManager(client);
+const connectionManager = new ConnectionManager();
 const memoryManager = new MemoryManager();
 
-// Setup periodic cache cleanup
+// Setup periodic cache cleanup and connection stability check
 setInterval(() => {
-	memoryManager.clearOldCache();
-}, 1800000);
+	memoryManager.cleanupCache();
+}, CACHE_CLEANUP_INTERVAL);
+
+// Reset connection manager counters every hour if stable
+setInterval(() => {
+	connectionManager.resetReconnectCounter();
+}, 60 * 60 * 1000);
 
 client.commands = new Collection();
 
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-for (const file of commandFiles) {
+// Improved command loading with async/await
+async function loadCommands() {
+	const commandsPath = path.join(__dirname, '..', '..', 'commands');
+	
 	try {
-		const filePath = path.join(commandsPath, file);
-		const command = require(filePath);
+		const commandFiles = await fs.readdir(commandsPath);
+		const jsFiles = commandFiles.filter(file => file.endsWith('.js'));
+		
+		logger.info(`${shardInfo} Found ${jsFiles.length} command files`);
+		
+		for (const file of jsFiles) {
+			try {
+				const filePath = path.join(commandsPath, file);
+				const command = require(filePath);
+				
+				if ('data' in command && 'execute' in command) {
+					client.commands.set(command.data.name, command);
+					logger.debug(`${shardInfo} Loaded command: ${command.data.name}`);
+				} else {
+					logger.warn(`${shardInfo} [WARNING] The command at ${filePath} is missing required "data" or "execute" property.`);
+				}
+			} catch (error) {
+				logger.error(`${shardInfo} Error loading command file: ${file}`, error);
+			}
+		}
+		
+		logger.info(`${shardInfo} Successfully loaded ${client.commands.size} commands`);
+	} catch (error) {
+		logger.error(`${shardInfo} Error loading commands directory:`, error);
+		process.exit(1);
+	}
+}
 
-		if ('data' in command && 'execute' in command) {
-			client.commands.set(command.data.name, command);
-		} else {
-			console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+// Check if guilds exist in database and add if missing
+async function checkGuildsForExisting() {
+	logger.info(`${shardInfo} [GUILD EXISTING] start...`);
+	try {
+		const guilds = await client.guilds.fetch();
+		logger.info(`${shardInfo} Checking ${guilds.size} guilds...`);
+		
+		let added = 0;
+		for (const guild of guilds.values()) {
+			if (!(await chatExists(guild.id))) {
+				await insert(guild.id);
+				logger.info(`${shardInfo} [ADDED] ${guild.id} (${guild.name})`);
+				added++;
+			}
+		}
+		
+		logger.info(`${shardInfo} [GUILD EXISTING] complete. Added ${added} new guilds.`);
+	} catch (error) {
+		logger.error(`${shardInfo} [GUILD EXISTING] Error checking guilds:`, error);
+	}
+}
+
+// Helper function to efficiently check URL patterns
+function isFilteredUrl(content) {
+	// Check for common media/gif URLs to ignore
+	if (content.startsWith(URL_PATTERNS.TENOR) || 
+		content.startsWith(URL_PATTERNS.DISCORD_MEDIA)) {
+		return true;
+	}
+	
+	// Check for GIF extensions
+	for (const pattern of URL_PATTERNS.GIF_EXTENSIONS) {
+		if (content.includes(pattern)) {
+			return true;
+		}
+	}
+	
+	// Check if it's any URL
+	return content.includes('http') || isURL(content);
+}
+
+// Handle message processing separately for better organization
+async function processMessage(message) {
+	if (!message.guildId || message.author.bot) return;
+
+	try {
+		// Track message for analysis
+		memoryManager.trackMessage(message);
+
+		const content = message.content;
+		const attachment = message.attachments.first();
+
+		// Don't process URLs/media
+		if (content && isFilteredUrl(content)) {
+			return;
+		}
+		
+		// Ensure guild is in database
+		await insert(message.guildId);
+
+		// Fetch chat settings and textbase
+		const chat = await getChat(message.guildId);
+		const textbase = chat.textbase;
+		const count = textbase.length;
+
+		// Manage database size
+		if (count >= config.raw_limit) {
+			await deleteFirst(message.guildId);
+		}
+
+		// Store message content if appropriate
+		if (content && content.length > 0 && content.length <= MAX_MESSAGE_LENGTH) {
+			await updateText(message.guildId, content);
+		}
+
+		// Store attachment URL if present
+		if (attachment) {
+			await updateText(message.guildId, attachment.url);
+		}
+
+		// Exit early if chat is disabled or no text to generate from
+		if (chat.talk === 0 || textbase.length < 1) return;
+
+		// Add current message to local textbase for generation
+		if (content) {
+			textbase.push(content);
+		}
+
+		// Determine if bot should reply (based on speed setting)
+		const shouldReply = (() => {
+			const integers = range(1, chat.speed);
+			const randomNum = randomInteger(1, chat.speed);
+			const chosenNum = choice(integers);
+			return chosenNum === randomNum;
+		})();
+		
+		if (shouldReply) {
+			await generateAndSendReply(message.channelId, textbase, chat.gen);
 		}
 	} catch (error) {
-		console.error(`Error loading command file: ${file}`);
-		console.error(error);
+		logger.error(`${shardInfo} Error processing message in guild ${message.guildId}:`, error);
 	}
 }
 
-async function checkGuildsForExisting() {
-	console.log('[GUILD EXISTING] start...');
-	const guilds = await client.guilds.fetch();
-	for (const guild of guilds.values()) {
-		if (!(await chatExists(guild.id))) {
-			await insert(guild.id);
-			console.log('[ADDED]', guild.id);
+// Generate and send a reply based on textbase
+async function generateAndSendReply(channelId, textbase, genType) {
+	try {
+		const chain = new Markov(textbase.join(' '));
+		const generatedText = (genType === 1) ? chain.generate_high(50) : chain.generate_low(50);
+		
+		if (!generatedText || generatedText === '') {
+			return;
 		}
+		
+		// Fix capitalization issues
+		const correctedText = generatedText.replace(/\bHttps/g, 'https');
+		
+		const channel = client.channels.cache.get(channelId);
+		if (!channel) {
+			logger.warn(`${shardInfo} Channel ${channelId} not found for sending message`);
+			return;
+		}
+		
+		// Check if Discord attachment URL is in the generated text
+		const isLinkIncluded = correctedText.includes('https://cdn.discordapp.com');
+		
+		if (isLinkIncluded) {
+			// Extract the link
+			const linkMatch = correctedText.match(/(https?:\/\/[^\s]+)/g);
+			if (!linkMatch || !linkMatch[0]) return;
+			
+			const link = linkMatch[0];
+			const text = correctedText.replace(link, '').trim();
+			
+			try {
+				// Verify the attachment URL is valid
+				const response = await fetch(link, { method: 'HEAD' });
+				
+				if (response.ok) {
+					await channel.send({
+						content: text,
+						files: [{ attachment: link }]
+					}).catch(err => {
+						logger.warn(`${shardInfo} Failed to send message with attachment to ${channelId}:`, err.message);
+					});
+				} else {
+					logger.log(`${shardInfo} Invalid attachment URL in generated text: ${link} (Status: ${response.status})`);
+					// Send text without the invalid attachment
+					await channel.send(text || correctedText).catch(err => {
+						logger.warn(`${shardInfo} Failed to send text-only message to ${channelId}:`, err.message);
+					});
+				}
+			} catch (err) {
+				logger.error(`${shardInfo} Error validating attachment URL: ${link}`, err.message);
+				// Fallback to just sending the text
+				await channel.send(text || correctedText).catch(() => {});
+			}
+		} else {
+			// Simple text reply
+			await channel.send(correctedText).catch(err => {
+				logger.warn(`${shardInfo} Failed to send message to ${channelId}:`, err.message);
+			});
+		}
+	} catch (error) {
+		logger.error(`${shardInfo} Error generating/sending reply to channel ${channelId}:`, error);
 	}
-	console.log('[GUILD EXISTING] stop.');
 }
 
-client.once(Events.ClientReady, c => {
-	console.log(`Ready! Logged in as ${c.user.tag}`);
+// Set up event handlers
+client.once(Events.ClientReady, async c => {
+	logger.info(`${shardInfo} Ready! Logged in as ${c.user.tag}`);
+	logger.info(`${shardInfo} Serving ${client.guilds.cache.size} guilds`);
+	
+	// Initialize and check guilds
+	await checkGuildsForExisting();
+	
+	// Send heartbeats to shard manager if sharded
+	if (client.shard) {
+		setInterval(() => {
+			client.shard.send('heartbeat');
+		}, 30000);
+	}
 });
 
 client.on(Events.InteractionCreate, async interaction => {
 	if (!interaction.isChatInputCommand()) return;
 
 	const command = client.commands.get(interaction.commandName);
-
 	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
+		logger.error(`${shardInfo} No command matching ${interaction.commandName} was found.`);
 		return;
 	}
 
 	try {
 		await command.execute(interaction);
 	} catch (error) {
-		console.error(error);
-		await interaction.editReply({ content: 'Error... Try again..', ephemeral: true }).catch(console.error);
+		logger.error(`${shardInfo} Error executing command ${interaction.commandName}:`, error);
+		
+		const errorReply = { 
+			content: 'An error occurred while executing this command.', 
+			ephemeral: true 
+		};
+		
+		if (interaction.replied || interaction.deferred) {
+			await interaction.editReply(errorReply).catch(console.error);
+		} else {
+			await interaction.reply(errorReply).catch(console.error);
+		}
 	}
 });
 
 client.on(Events.GuildCreate, async guild => {
-	const channel = guild.channels.cache.find(channel =>
-		channel.type === ChannelType.GuildText && channel.permissionsFor(guild.members.me)
-		.has(PermissionsBitField.Flags.SendMessages));
-
+	logger.info(`${shardInfo} Bot added to new guild: ${guild.name} (${guild.id})`);
+	
 	try {
 		await insert(guild.id);
-	} catch (e) {
-		console.log("Ошибка при инвайте", e);
-		await channel.send(`Error! I can't add your server to the database. Please kick and re-invite me to fix this.`);
-	} finally {
-		await channel.send(`Hi **${guild.name}**!\nThanks for inviting me, I'm **Neurobalbes** and I remember your messages to generate my own.\n\nFor my commands, type \`/help\`\nTo change the bot language, type \`/language\``).catch(() => {/* Ignore error */});
-	}
-});
-
-client.on(Events.MessageCreate, async message => {
-	if (!message.guildId || message.author.bot) return;
-
-	try {
-		// Add message to cache
-		memoryManager.addToCache(message.guildId, {
-			content: message.content,
-			timestamp: Date.now()
-		});
-
-		const attachment = message.attachments.first();
-
-		const isTenorLink = message.content.startsWith("https://tenor.com/view");
-		const isDiscordLink = message.content.startsWith("https://media.discordapp.net/")
-		const isGif = message.content.includes(".gif") ||  message.content.includes("-gif")
-		const containsHttp = message.content.includes("http");
-		const isMessageUrl = isURL(message.content);
 		
-		if (isTenorLink || isDiscordLink || isGif) {
-			// Ignore
-		} else if (containsHttp || isMessageUrl) {
-			return;
-		}
+		// Find a suitable channel to send welcome message
+		const channel = guild.channels.cache.find(channel =>
+			channel.type === ChannelType.GuildText && 
+			channel.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+		);
 		
-		await insert(message.guildId);
-
-		let chat = await getChat(message.guildId);
-		let textbase = chat.textbase;
-		let count = textbase.length;
-
-		if (count >= raw_limit) await deleteFirst(message.guildId);
-
-		if (message.content.length > 0 && message.content.length <= 1000 && count <= raw_limit) {
-			await updateText(message.guildId, message.content);
-		}
-
-		if (attachment) {
-			await updateText(message.guildId, attachment.url);
-		}
-
-		if (chat.talk === 0 || textbase.length < 1) return;
-
-		chat.textbase.push(message.content);
-
-		const integers = range(1, chat.speed);
-		const randoms = randomInteger(1, chat.speed);
-		const x = choice(integers);
-		
-		if (x === randoms) {
-			const chain = new Markov(textbase.join(' '));
-			const generated_text = (chat.gen === 1) ? chain.generate_high(50) : chain.generate_low(50);
-		
-			if (!generated_text || generated_text === '') {
-				return;
-			}
-		
-			const correctedText = generated_text.replace('Https', 'https');
-		
-			const channel = client.channels.cache.get(message.channelId);
-			const isLinkIncluded = correctedText.includes('https://cdn.discordapp.com');
-		
-			if (isLinkIncluded) {
-				const link = correctedText.match(/(https?:\/\/[^\s]+)/g);
-				const text = correctedText.replace(link[0], '');
-				try {
-					const response = await fetch(link[0]);
-					if (response.status === 200) {
-						await channel.send({
-							content: text,
-							files: [{
-								attachment: link[0]
-							}]
-						}).catch(() => {
-							// Игнорировать
-						});
-					} else {
-						console.log("Ссылка не существует:", link[0]);
-					}
-				} catch (err) {
-					console.error(err);
-				}
-			} else {
-				await channel.send(correctedText).catch(() => {
-					// Игнорировать
-				});
-			}
+		if (channel) {
+			await channel.send({
+				content: `Hi **${guild.name}**!\nThanks for inviting me, I'm **Neurobalbes** and I remember your messages to generate my own.\n\nFor my commands, type \`/help\`\nTo change the bot language, type \`/language\``
+			}).catch(err => logger.warn(`${shardInfo} Could not send welcome message:`, err.message));
 		}
 	} catch (error) {
-		console.error('Error processing message:', error);
+		logger.error(`${shardInfo} Error initializing data for new guild ${guild.id}:`, error);
+		
+		const channel = guild.channels.cache.find(channel =>
+			channel.type === ChannelType.GuildText && 
+			channel.permissionsFor(guild.members.me).has(PermissionsBitField.Flags.SendMessages)
+		);
+		
+		if (channel) {
+			await channel.send({
+				content: `Error! I can't add your server to the database. Please kick and re-invite me to fix this.`
+			}).catch(() => {});
+		}
 	}
 });
 
-// Add better error handling
-client.on('error', error => {
-	console.error('Client error:', error);
-	connectionManager.handleDisconnect(error);
+// Use processMessage for message handling
+client.on(Events.MessageCreate, processMessage);
+
+// Improved error handling
+client.on(Events.Error, error => {
+	logger.error(`${shardInfo} Client error:`, error);
+	connectionManager.handleDisconnect(client, error);
 });
 
-client.on('disconnect', () => {
-	console.log('Bot disconnected!');
-	connectionManager.handleDisconnect(new Error('Manual disconnect'));
+client.on(Events.ShardDisconnect, (closeEvent, shardId) => {
+	logger.warn(`${shardInfo} Shard ${shardId} disconnected with code ${closeEvent.code}:`, closeEvent.reason);
+	connectionManager.handleDisconnect(client, new Error(`Shard ${shardId} disconnected: ${closeEvent.reason}`));
 });
 
+client.on(Events.ShardError, (error, shardId) => {
+	logger.error(`${shardInfo} Shard ${shardId} error:`, error);
+	// Don't disconnect for shard errors, they might be transient
+});
+
+// Handle unhandled promise rejections
 process.on('unhandledRejection', error => {
-	console.error('Unhandled promise rejection:', error);
+	logger.error(`${shardInfo} Unhandled promise rejection:`, error);
 });
 
-client.on('debug', console.log);
-client.on('warn', console.log);
+// Handle uncaught exceptions
+process.on('uncaughtException', error => {
+	logger.error(`${shardInfo} Uncaught exception:`, error);
+	// Don't exit for all uncaught exceptions, only critical ones
+	if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+		logger.log(`${shardInfo} Recovered error, continuing execution...`);
+	} else {
+		logger.error(`${shardInfo} Critical error, exiting in 5 seconds...`);
+		setTimeout(() => process.exit(1), 5000);
+	}
+});
 
-client.login(token);
+// Log warning/debug messages in non-production environments
+if (process.env.NODE_ENV !== 'production') {
+	client.on(Events.Debug, info => logger.log(`${shardInfo} [DEBUG]`, info));
+	client.on(Events.Warn, info => logger.warn(`${shardInfo} [WARN]`, info));
+}
+
+// Start everything
+async function main() {
+	try {
+		// Load commands first
+		await loadCommands();
+		
+		// Then login
+		await client.login(config.token);
+	} catch (error) {
+		logger.error(`${shardInfo} Failed to initialize bot:`, error);
+		process.exit(1);
+	}
+}
+
+main();

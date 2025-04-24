@@ -1,0 +1,13 @@
+.cursor/ 
+
+# Node modules
+node_modules/
+
+# Logs
+logs/
+
+# Configuration
+config.json
+
+# OS generated files
+.DS_Store 

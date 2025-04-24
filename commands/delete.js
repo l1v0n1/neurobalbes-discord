@@ -2,7 +2,7 @@ const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const { remove, getChat } = require('../database')
 const { languages } = require('../assets/descriptions');
 const { answers } = require('../assets/answers');
-const { getLocale, getLocaleWithoutString } = require('../functions');
+const { getLocale } = require('../functions');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -14,7 +14,7 @@ module.exports = {
             .setName('mention')
             .setDescription(languages.delete.mention['en-US'])
             .setDescriptionLocalizations(languages.delete.mention)
-            .addMentionableOption(option =>
+            .addUserOption(option =>
                 option
                 .setName('user')
                 .setDescription(languages.delete.user['en-US'])
@@ -32,20 +32,80 @@ module.exports = {
                     .setDescription(languages.delete.input['en-US'])
                     .setDescriptionLocalizations(languages.delete.input)
                     .setRequired(true))
-        ),
+        )
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .setDMPermission(false),
     async execute(interaction) {
-        if (interaction.guildId == null) {
+        if (!interaction.guildId) {
+            try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
             return;
         }
-        await interaction.reply(`⏳`);
-        const chat = await getChat(interaction.guildId);
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return await interaction.editReply({ content: getLocaleWithoutString(answers, 'access_denied', chat.lang), ephemeral: true });
-        }
 
-        const option = interaction.options.getSubcommand();
-        const args = (option === 'mention') ? interaction.options.get('user').value : interaction.options.get('input').value;
-        await remove(interaction.guildId, args);
-        return await interaction.editReply(getLocale(answers, 'delete', option, chat.lang));
+        let currentChat;
+        let currentLang = 'en-US';
+        let dbErrorOccurred = false;
+
+        try {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                currentChat = await getChat(interaction.guildId);
+                currentLang = currentChat?.lang || 'en-US';
+            } catch (dbError) {
+                dbErrorOccurred = true;
+                console.error(`DB error fetching chat for delete command pre-check in guild ${interaction.guildId}:`, dbError);
+            }
+
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const denyMessage = getLocale(answers, 'common', 'access_denied', currentLang) || "You do not have permission to use this command.";
+                return await interaction.editReply({ content: denyMessage });
+            }
+
+            if (dbErrorOccurred) {
+                const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred fetching current settings.";
+                return await interaction.editReply({ content: dbErrorMessage });
+            }
+
+            const subcommand = interaction.options.getSubcommand();
+            let valueToRemove = null;
+            let localeSuccessKey = 'mention';
+
+            if (subcommand === 'mention') {
+                const user = interaction.options.getUser('user', true);
+                valueToRemove = user.id;
+                localeSuccessKey = 'mention';
+            } else if (subcommand === 'string') {
+                valueToRemove = interaction.options.getString('input', true);
+                localeSuccessKey = 'string';
+            } else {
+                console.error(`Unknown subcommand ${subcommand} in delete command for guild ${interaction.guildId}`);
+                return await interaction.editReply({ content: "Invalid command option." });
+            }
+
+            if (valueToRemove === null || (typeof valueToRemove === 'string' && valueToRemove.trim() === '')) {
+                return await interaction.editReply({ content: "Invalid value provided for removal." });
+            }
+
+            try {
+                await remove(interaction.guildId, valueToRemove);
+                const successMessage = getLocale(answers, 'delete', localeSuccessKey, currentLang) || "Successfully removed entries.";
+                await interaction.editReply({ content: successMessage });
+
+            } catch (removeError) {
+                console.error(`DB error removing data (${subcommand} - ${valueToRemove}) for guild ${interaction.guildId}:`, removeError);
+                const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred during removal.";
+                await interaction.editReply({ content: dbErrorMessage });
+            }
+
+        } catch (error) {
+            console.error(`Error executing delete command for guild ${interaction.guildId}:`, error);
+            if (interaction.deferred || interaction.replied) {
+                try {
+                    await interaction.editReply({ content: "An unexpected error occurred." });
+                } catch (editError) {
+                    console.error("Failed to send final error reply for delete command:", editError);
+                }
+            }
+        }
     }
 };

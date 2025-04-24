@@ -92,6 +92,12 @@ const cache = {
 // Clear expired cache entries periodically
 setInterval(() => cache.clear(), 60000);
 
+// Helper to validate chatid/guildId format
+function isValidChatId(chatid) {
+    // Basic check: ensure it's a string containing only digits (adjust regex if IDs can have other chars)
+    return typeof chatid === 'string' && /^[0-9]+$/.test(chatid);
+}
+
 async function withConnection(operation) {
     const conn = await connectionPool.getConnection();
     try {
@@ -103,14 +109,26 @@ async function withConnection(operation) {
 }
 
 async function insert(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     try {
-        await getChat(chatid);
+        // Check existence first, more direct
+        const exists = await chatExists(chatid);
+        if (!exists) {
+             await retry(() => createTable(chatid));
+        }
     } catch (e) {
+        // If chatExists fails, maybe try creating anyway?
+        console.error(`Error during insert check for ${chatid}, attempting createTable:`, e);
         await retry(() => createTable(chatid));
     }
 }
 
 async function getChat(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     const cacheKey = `chat_${chatid}`;
     const cachedResult = cache.get(cacheKey);
     if (cachedResult) {
@@ -127,51 +145,77 @@ async function getChat(chatid) {
 }
 
 async function createTable(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     await withConnection(async (db) => {
+        // Use template literal *only* after validation
+        const tableName = `peer${chatid}`;
         await db.exec(`
-            CREATE TABLE IF NOT EXISTS peer${chatid} (
+            CREATE TABLE IF NOT EXISTS ${tableName} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                peer_id INT DEFAULT ${chatid},
+                peer_id TEXT DEFAULT '${chatid}', // Store as TEXT if using validated string ID
                 talk INT DEFAULT 1,
                 gen INT DEFAULT 0,
                 speed INT DEFAULT 3,
                 textbase TEXT,
                 lang TEXT DEFAULT 'en'
             );
-            CREATE INDEX IF NOT EXISTS idx_peer${chatid}_textbase ON peer${chatid}(textbase);
+            CREATE INDEX IF NOT EXISTS idx_${tableName}_textbase ON ${tableName}(textbase);
         `);
 
-        const result = await db.get(`SELECT * FROM peer${chatid}`);
+        const result = await db.get(`SELECT 1 FROM ${tableName} WHERE peer_id = ? LIMIT 1`, [chatid]);
 
         if (!result) {
-            await db.run(`
-                INSERT OR IGNORE INTO peer${chatid}
-                (peer_id, talk, gen, speed, lang)
-                VALUES (:id, :talk, :gen, :speed, :lang)
-            `, {
-                ':id': chatid,
-                ':talk': 1,
-                ':gen': 0,
-                ':speed': 3,
-                ':lang': 'en',
-            });
+            try {
+                await db.run(`
+                    INSERT INTO ${tableName}
+                    (peer_id, talk, gen, speed, lang)
+                    VALUES (?, ?, ?, ?, ?)
+                `, [
+                    chatid, // Parameterized
+                    1, 
+                    0, 
+                    3, 
+                    'en',
+                ]);
+            } catch (insertError) {
+                 // Handle potential race condition if another process inserted simultaneously
+                 if (!insertError.message.includes('UNIQUE constraint failed')) {
+                     throw insertError; // Re-throw other errors
+                 }
+                 console.warn(`Insert failed for ${tableName}, likely race condition.`);
+             }
         }
+        // Invalidate exists cache after ensuring table/row exists
+        cache.data.delete(`exists_${chatid}`);
     });
 }
 
 async function fetchChat(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     return await withConnection(async (db) => {
+        const tableName = `peer${chatid}`;
         const [chat, textbase] = await Promise.all([
-            db.get(`SELECT * FROM peer${chatid}`),
+            db.get(`SELECT * FROM ${tableName} WHERE peer_id = ?`, [chatid]), // Ensure fetching for the correct peer_id
             db.all(`
                 SELECT textbase 
-                FROM peer${chatid} 
+                FROM ${tableName} 
                 WHERE textbase IS NOT NULL AND textbase != ''
                 ORDER BY id DESC
                 LIMIT 1000
             `)
         ]);
         
+        if (!chat) { // Handle case where peer_id row doesn't exist yet
+            // Optionally, create the row here or throw a specific error
+            console.warn(`No chat settings row found for ${tableName}, peer_id ${chatid}`);
+            // Returning a default structure or throwing might be better
+            return { peer_id: chatid, talk: 1, gen: 0, speed: 3, lang: 'en', textbase: [] }; 
+        }
+
         chat.textbase = textbase.map(i => i.textbase);
         return chat;
     });
@@ -196,6 +240,11 @@ async function retry(operation, options = {}) {
 }
 
 async function chatExists(chatid) {
+    if (!isValidChatId(chatid)) {
+        // Decide how to handle invalid ID here - throw or return false?
+        console.error(`Invalid chat ID format requested in chatExists: ${chatid}`);
+        return false; 
+    }
     const cacheKey = `exists_${chatid}`;
     const cachedResult = cache.get(cacheKey);
     if (cachedResult !== null) {
@@ -203,9 +252,10 @@ async function chatExists(chatid) {
     }
 
     const exists = await withConnection(async (db) => {
+        const tableName = `peer${chatid}`;
         const chat = await db.get(
-            `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-            [`peer${chatid}`]
+            `SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?`,
+            [tableName] // Parameterized table name check
         );
         return chat !== undefined;
     });
@@ -215,46 +265,73 @@ async function chatExists(chatid) {
 }
 
 async function deleteFirst(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     return await retry(async () => {
         return await withConnection(async (db) => {
+            const tableName = `peer${chatid}`;
+            // ... rest of deleteFirst implementation using tableName ...
             await db.run(`
-                DELETE FROM peer${chatid} 
+                DELETE FROM ${tableName} 
                 WHERE id = (
-                    SELECT id FROM peer${chatid} 
-                    WHERE textbase IS NOT NULL 
+                    SELECT id FROM ${tableName} 
+                    WHERE textbase IS NOT NULL AND textbase != ''
                     ORDER BY id ASC 
                     LIMIT 1
                 )
             `);
             cache.data.delete(`chat_${chatid}`);
-            return "Successfully deleted first row.";
+            // Returning a string message might be less useful than returning status/count
+            return { success: true }; 
         });
     }, { retries: 3, delay: 100 });
 }
 
 async function updateText(chatid, text) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     await withConnection(async (db) => {
+        const tableName = `peer${chatid}`;
         await db.run(
-            `INSERT INTO peer${chatid} (textbase) VALUES (?)`,
-            [text]
+            `INSERT INTO ${tableName} (textbase) VALUES (?)`,
+            [text] // Parameterized
         );
         cache.data.delete(`chat_${chatid}`);
     });
 }
 
 async function changeField(chatid, field, key) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
+    // Prevent SQL injection by validating the field name
+    if (!ALLOWED_FIELDS_TO_CHANGE.includes(field)) {
+        console.error(`Attempted to change invalid field: ${field}`);
+        throw new Error(`Invalid field specified: ${field}`);
+    }
+
     await withConnection(async (db) => {
+        const tableName = `peer${chatid}`;
+        // Use validated field name safely in the query
         await db.run(
-            `UPDATE peer${chatid} SET ${field} = ? WHERE peer_id = ?`,
-            [key, chatid]
+            `UPDATE ${tableName} SET ${field} = ? WHERE peer_id = ?`,
+            [key, chatid] // Parameterized
         );
-        cache.data.delete(`chat_${chatid}`);
+        // Invalidate cache for the updated chat
+        cache.data.delete(`chat_${chatid}`); 
     });
 }
 
 async function clearText(chatid) {
+    if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     await withConnection(async (db) => {
-        await db.run(`UPDATE peer${chatid} SET textbase = NULL WHERE peer_id = ?`, [chatid]);
+        const tableName = `peer${chatid}`;
+        // Delete only rows with textbase, keep the settings row
+        await db.run(`DELETE FROM ${tableName} WHERE textbase IS NOT NULL`);
         cache.data.delete(`chat_${chatid}`);
     });
 }
@@ -271,20 +348,39 @@ async function sender() {
 }
 
 async function deleteNulls(chatid) {
+     if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
     await withConnection(async (db) => {
-        await db.run(`DELETE FROM peer${chatid} WHERE textbase IS NULL`);
+        const tableName = `peer${chatid}`;
+        await db.run(`DELETE FROM ${tableName} WHERE textbase IS NULL`);
         cache.data.delete(`chat_${chatid}`);
     });
 }
 
 async function remove(chatid, args) {
-    await withConnection(async (db) => {
-        await db.run(
-            `DELETE FROM peer${chatid} WHERE textbase LIKE ?`,
-            [`%${args}%`]
-        );
-        cache.data.delete(`chat_${chatid}`);
-    });
+     if (!isValidChatId(chatid)) {
+        throw new Error(`Invalid chat ID format: ${chatid}`);
+    }
+     await withConnection(async (db) => {
+        const tableName = `peer${chatid}`;
+        let result;
+        // Check if args looks like a user mention ID (string of digits)
+        if (typeof args === 'string' && /^\d+$/.test(args)) {
+            const userIdMention = `<@${args}>`;
+            // Remove based on user mention - potentially slow if textbase is large
+            result = await db.run(`DELETE FROM ${tableName} WHERE textbase LIKE ?`, [userIdMention + '%']); // Use LIKE ?
+             console.log(`Removed ${result.changes} entries for user ID ${args} in ${tableName}`);
+        } else if (typeof args === 'string') {
+            // Remove based on exact string match
+             result = await db.run(`DELETE FROM ${tableName} WHERE textbase = ?`, [args]); // Use = ?
+            console.log(`Removed ${result.changes} entries matching string in ${tableName}`);
+        } else {
+            console.warn(`Invalid args type passed to remove function for ${tableName}:`, args);
+             return;
+        }
+         cache.data.delete(`chat_${chatid}`);
+     });
 }
 
 // Graceful shutdown

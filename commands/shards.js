@@ -1,32 +1,105 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, Status } = require('discord.js');
 const { languages } = require('../assets/descriptions');
-const { adminId } = require('../config.json');
+
+// Attempt to load adminId, handle if config.json or key is missing
+let adminId = null;
+try {
+	adminId = require('../config.json').adminId;
+} catch (error) {
+	if (error.code !== 'MODULE_NOT_FOUND') {
+		console.error("Error loading adminId from config.json:", error);
+	}
+	// adminId remains null
+}
+
+// Map ws status codes to readable strings
+const statusMap = {
+	[Status.Ready]: 'Ready',
+	[Status.Connecting]: 'Connecting',
+	[Status.Reconnecting]: 'Reconnecting',
+	[Status.Idle]: 'Idle',
+	[Status.Nearly]: 'Nearly',
+	[Status.Disconnected]: 'Disconnected',
+	// Add other statuses if necessary
+};
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('shards')
-		.setDescription('Bot shards')
+		.setDescription('Shows information about bot shards (Admin only)')
 		.setDescriptionLocalizations(languages.shards.main)
-        ,
+		.setDMPermission(false), // Shard info is not relevant in DMs
 	async execute(interaction) {
-		await interaction.reply(`⏳`);
-		if (interaction.user.id == adminId) {
-			interaction.client.shard.broadcastEval(client => [client.shard.ids, client.ws.status, client.ws.ping, client.guilds.cache.size])
-			.then((results) =>{
-				const embed = new EmbedBuilder()
-					.setTitle(`👨‍💻 Bot Shards (${interaction.client.shard.count})`)
-					.setColor('#ccd6dd')
-					.setTimestamp();
-				
-				results.map((data) => {
-					embed.addFields({name: `📡 Shard ${data[0]}`, value: `**Status:** ${data[1]}\n**Ping:** ${data[2]}ms\n**Guilds:** ${data[3]}`})
+		try {
+			await interaction.deferReply({ ephemeral: true });
+
+			if (!adminId) {
+				console.error("Admin ID is not configured in config.json for shards command.");
+				await interaction.editReply({ content: "Command configuration error: Admin ID not set." });
+				return;
+			}
+
+			if (interaction.user.id !== adminId) {
+				// Use a localized deny message if available, otherwise fallback
+				// let lang = await fetchLang(interaction.guildId); // Need a way to get lang if needed
+				// const denyMessage = getLocale(answers, 'common', 'access_denied', lang) || "Access denied."; 
+				await interaction.editReply({ content: "Access denied." }); // Keep ephemeral
+				return;
+			}
+
+			// Check if sharding is enabled
+			if (!interaction.client.shard) {
+				await interaction.editReply({ content: "Sharding is not enabled for this bot." });
+				return;
+			}
+
+			const results = await interaction.client.shard.broadcastEval(client => [
+				client.shard.ids[0], // Get the first (should be only) shard ID in this process
+				client.ws.status,
+				Math.round(client.ws.ping), // Round ping
+				client.guilds.cache.size
+			]);
+
+			const embed = new EmbedBuilder()
+				.setTitle(`👨‍💻 Bot Shards (${interaction.client.shard.count})`)
+				.setColor('#ccd6dd') // Consider making color a constant
+				.setTimestamp();
+
+			results.forEach((data) => { // Use forEach for clarity as map return value isn't used
+				const shardId = data[0];
+				const statusNumber = data[1];
+				const ping = data[2];
+				const guildCount = data[3];
+				const statusString = statusMap[statusNumber] || `Unknown (${statusNumber})`; // Map status number to string
+
+				embed.addFields({
+					name: `📡 Shard ${shardId}`,
+					// Use inline: true for potentially better layout with many shards
+					value: `**Status:** ${statusString}\n**Ping:** ${ping}ms\n**Guilds:** ${guildCount}`,
+					inline: true
 				});
-				return interaction.editReply({ embeds: [embed] }).catch(() => {/*Ignore error*/});
-			})
-			.catch((error) => {
-				console.error(error);
-				return interaction.editReply(`❌ Error.`).catch(() => {/*Ignore error*/});
 			});
-		} else return await interaction.editReply("Access denied").catch(() => {/*Ignore error*/})
-    }
+
+			await interaction.editReply({ embeds: [embed] });
+
+		} catch (error) {
+			console.error("Error executing shards command:", error);
+			const errorMessage = "An error occurred while fetching shard information.";
+			// Check if reply is possible
+			if (interaction.deferred || interaction.replied) {
+				try {
+					await interaction.editReply({ content: errorMessage });
+				} catch (editError) {
+					console.error("Failed to send error reply for shards command:", editError);
+				}
+			} else {
+				// If defer failed, attempt a normal reply (unlikely to work)
+				try {
+					await interaction.reply({ content: errorMessage, ephemeral: true });
+				} catch (replyError) {
+					console.error("Failed to send initial error reply for shards command:", replyError);
+				}
+			}
+		}
+	}
 };

@@ -1,9 +1,32 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, Util } = require('discord.js');
 const { getChat } = require('../database');
 const Markov = require('../markov.js');
-const { choice, range, randomInteger, getLocaleWithoutString, getLocale } = require('../functions');
+const { getLocaleWithoutString, getLocale, randomInteger } = require('../functions');
 const { languages } = require('../assets/descriptions');
 const { answers } = require('../assets/answers');
+
+// Constants for generation parameters
+const LONG_TEXT_LENGTH = 400;
+const BUGURT_MIN_LINES = 2;
+const BUGURT_MAX_LINES = 8;
+const DIALOGUE_MIN_LINES = 3;
+const DIALOGUE_MAX_LINES = 4;
+const POEM_MIN_LINES = 4;
+const POEM_MAX_LINES = 16;
+const QUOTE_LENGTH = 50;
+const MAX_REPLY_LENGTH = 2000;
+
+// Helper function to safely generate text
+function safeGenerate(chain, method, ...args) {
+    try {
+        const result = chain[method](...args);
+        // Basic check for empty or invalid result
+        return (typeof result === 'string' && result.trim().length > 0) ? result : null;
+    } catch (genError) {
+        console.error(`Markov generation error (${method}):`, genError);
+        return null;
+    }
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -28,63 +51,148 @@ module.exports = {
         )
     ),
   async execute(interaction) {
-    if (!interaction.guildId) return;
-
-    await interaction.reply('⏳');
-    const type = interaction.options.get('type').value;
-    const chat = await getChat(interaction.guildId);
-    const text_lines = chat.textbase.length;
-
-    const chain = new Markov(chat.textbase.join(' '));
-
-    if (text_lines < 1) {
-      return await interaction.editReply(getLocaleWithoutString(answers, 'not_enough_data', chat.lang));
+    if (!interaction.guildId) {
+      // Inform user it's guild-only
+      try {
+        await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+      } catch (replyError) {
+        console.error("Failed to send guild-only reply:", replyError);
+      }
+      return;
     }
 
-    let reply;
-    switch (type) {
-      case 'default':
-        reply = chain.generate_low();
-        break;
-      case 'syntax':
-        reply = chain.generate_high();
-        break;
-      case 'long':
-        reply = chain.generate_low(400);
-        break;
-      case 'joke': {
-        const generated_text = chain.generate_low();
-        const random_string = getLocale(answers, 'gen', 'jokes', chat.lang, generated_text);
-        reply = choice(random_string);
-        break;
+    await interaction.reply({ content: '⏳', ephemeral: true }); // Make initial reply ephemeral
+    const type = interaction.options.getString('type'); // Use getString for clarity
+    let chat;
+    let lang = 'en-US'; // Default language
+
+    try {
+      chat = await getChat(interaction.guildId);
+      lang = chat?.lang || 'en-US'; // Set language after fetching chat
+    } catch (dbError) {
+      console.error(`Database error fetching chat for guild ${interaction.guildId}:`, dbError);
+      await interaction.editReply({ content: getLocale(answers, 'common', 'database_error', lang) });
+      return;
+    }
+
+    const textBase = chat?.textbase;
+    if (!Array.isArray(textBase) || textBase.length < 1) {
+      return await interaction.editReply({ content: getLocale(answers, 'gen', 'not_enough_data', lang) });
+    }
+
+    let chain;
+    try {
+      // Ensure elements are strings before joining
+      const validTextBase = textBase.filter(item => typeof item === 'string').join(' ');
+      if (validTextBase.trim().length === 0) {
+        return await interaction.editReply({ content: getLocale(answers, 'gen', 'not_enough_data', lang) });
       }
-      case 'bugurt': {
-        const bugurt = Array.from({ length: randomInteger(2, 8) }, () => chain.generate_low());
-        reply = bugurt.join('\n@\n');
-        break;
-      }
-      case 'dialogue': {
-        const dialogue = Array.from({ length: randomInteger(3, 4) }, () => chain.generate_low());
-        reply = dialogue.join('\n— ');
-        break;
-      }
-      case 'poem': {
-        const poem = [];
-        const string = "`%VAR%`\n".replace('%VAR%', getLocale(answers, 'gen', 'poem', chat.lang));
-        poem.push(string);
-        for (const _ of range(1, randomInteger(4, 16))) {
-          poem.push(chain.generate_high());
+      chain = new Markov(validTextBase);
+    } catch (initError) {
+      console.error(`Markov initialization error for guild ${interaction.guildId}:`, initError);
+      await interaction.editReply({ content: getLocale(answers, 'common', 'processing_error', lang) });
+      return;
+    }
+
+    let reply = null;
+    let success = true;
+
+    try {
+      switch (type) {
+        case 'default':
+          reply = safeGenerate(chain, 'generate_low');
+          break;
+        case 'syntax':
+          reply = safeGenerate(chain, 'generate_high');
+          break;
+        case 'long':
+          reply = safeGenerate(chain, 'generate_low', LONG_TEXT_LENGTH);
+          break;
+        case 'joke': {
+          const generated_text = safeGenerate(chain, 'generate_low');
+          if (generated_text) {
+            const jokes = getLocale(answers, 'gen', 'jokes', lang);
+            // Ensure jokes is an array before choosing
+            reply = Array.isArray(jokes) ? jokes[Math.floor(Math.random() * jokes.length)].replace('%VAR%', generated_text) : generated_text;
+          } else {
+            success = false;
+          }
+          break;
         }
-        reply = poem.join('\n');
-        break;
+        case 'bugurt': {
+          const numLines = randomInteger(BUGURT_MIN_LINES, BUGURT_MAX_LINES);
+          const lines = [];
+          for (let i = 0; i < numLines; i++) {
+            const line = safeGenerate(chain, 'generate_low');
+            if (line) lines.push(line);
+            else { success = false; break; } // Stop if generation fails
+          }
+          if (success && lines.length > 0) reply = lines.join('\n@\n');
+          else success = false;
+          break;
+        }
+        case 'dialogue': {
+          const numLines = randomInteger(DIALOGUE_MIN_LINES, DIALOGUE_MAX_LINES);
+          const lines = [];
+          for (let i = 0; i < numLines; i++) {
+            const line = safeGenerate(chain, 'generate_low');
+            if (line) lines.push(line);
+            else { success = false; break; }
+          }
+          if (success && lines.length > 0) reply = '— ' + lines.join('\n— '); // Add initial dash
+          else success = false;
+          break;
+        }
+        case 'poem': {
+          const numLines = randomInteger(POEM_MIN_LINES, POEM_MAX_LINES);
+          const poem = [];
+          const title = getLocale(answers, 'gen', 'poem', lang);
+          if (title) poem.push(`\`${title}\`\n`);
+
+          for (let i = 0; i < numLines; i++) {
+            const line = safeGenerate(chain, 'generate_high');
+            if (line) poem.push(line);
+            else { success = false; break; }
+          }
+          if (success && poem.length > (title ? 1 : 0)) reply = poem.join('\n');
+          else success = false;
+          break;
+        }
+        case 'quote':
+          const quoteText = safeGenerate(chain, 'generate_high', QUOTE_LENGTH);
+          if (quoteText) {
+            reply = `«${quoteText}»\n— *<@${interaction.applicationId}>*`;
+          } else {
+            success = false;
+          }
+          break;
+        default:
+          console.warn(`Unknown generation type '${type}' requested by user ${interaction.user.id} in guild ${interaction.guildId}`);
+          await interaction.editReply({ content: getLocale(answers, 'common', 'invalid_option', lang) });
+          return; // Exit early for unknown type
       }
-      case 'quote':
-        reply = `«${chain.generate_high(50)}», — *<@${interaction.applicationId}>*`;
-        break;
-      default:
-        return;
+    } catch (error) {
+      console.error(`Unhandled error during generation type ${type} for guild ${interaction.guildId}:`, error);
+      success = false;
     }
 
-    await interaction.editReply(reply);
+    if (!success || !reply) {
+      // Generic error if generation failed or reply is null/empty
+      return await interaction.editReply({ content: getLocale(answers, 'common', 'processing_error', lang) });
+    }
+
+    try {
+      // Truncate reply if it exceeds Discord's limit
+      const finalReply = Util.splitMessage(reply, { maxLength: MAX_REPLY_LENGTH, char: '\n' })[0];
+      await interaction.editReply(finalReply);
+    } catch (replyError) {
+      console.error(`Failed to send final reply for guild ${interaction.guildId}:`, replyError);
+      // Can't edit the reply again if it failed, maybe try followUp?
+      try {
+        await interaction.followUp({ content: "Failed to send the generated text.", ephemeral: true });
+      } catch (followUpError) {
+        console.error("Failed to send follow-up error message:", followUpError);
+      }
+    }
   }
 };

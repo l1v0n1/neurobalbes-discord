@@ -1,9 +1,20 @@
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const { answers } = require('../assets/answers');
 const { languages } = require('../assets/descriptions');
-const { prefix } = require('../config.json').prefix;
 const { changeField, getChat, clearText } = require('../database');
-const { getLocale, getLocaleWithoutString } = require('../functions');
+const { getLocale } = require('../functions');
+
+let prefix = '?';
+try {
+  prefix = require('../config.json').prefix || prefix;
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') {
+    console.error("Error loading prefix from config.json:", error);
+  }
+}
+
+const MIN_SPEED = 1;
+const MAX_SPEED = 10;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -21,6 +32,8 @@ module.exports = {
                 .setDescription(languages.setting.int['en-US'])
                 .setDescriptionLocalizations(languages.setting.int)
                 .setRequired(true)
+                .setMinValue(MIN_SPEED)
+                .setMaxValue(MAX_SPEED)
                 )
         )
         .addSubcommand(subcommand =>
@@ -64,57 +77,144 @@ module.exports = {
                     )
             )
         )
-        ,
-        async execute(interaction) {
-            if (interaction.guildId == null) {
-              return;
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .setDMPermission(false),
+    async execute(interaction) {
+         if (!interaction.guildId) {
+             try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
+             return;
+        }
+
+        let currentChat;
+        let currentLang = 'en-US';
+        let dbErrorOccurred = false;
+
+        try {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                currentChat = await getChat(interaction.guildId);
+                currentLang = currentChat?.lang || 'en-US';
+            } catch (dbError) {
+                dbErrorOccurred = true;
+                console.error(`DB error fetching chat for setting command pre-check in guild ${interaction.guildId}:`, dbError);
             }
-            await interaction.reply(`⏳`);
-            const chat = await getChat(interaction.guildId);
-          
+
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-              return await interaction.editReply({ content: getLocaleWithoutString(answers, 'access_denied', chat.lang) });
+                 const denyMessage = getLocale(answers, 'common', 'access_denied', currentLang) || "You do not have permission to use this command.";
+                 return await interaction.editReply({ content: denyMessage });
             }
-          
-            const scommand = interaction.options.getSubcommand();
-            switch (scommand) {
-              case 'speed':
-                const speed = interaction.options.get('int').value;
-                if (speed < 1 || speed > 10) {
-                  return await interaction.editReply({ content: getLocale(answers, 'setting', 'speed_wrong', chat.lang, prefix) });
-                }
-          
-                if (chat['speed'] === speed) {
-                  return await interaction.editReply({ content: getLocale(answers, 'setting', 'already', chat.lang) });
-                }
-          
-                await changeField(interaction.guildId, 'speed', speed);
-                return await interaction.editReply(getLocale(answers, 'setting', 'speed_changed', chat.lang, speed));
-              case 'syntax':
-                const syntax = interaction.options.get('bool').value;
-                const newGen = syntax ? 1 : 0;
-                if (chat['gen'] === newGen) {
-                  return await interaction.editReply({ content: getLocale(answers, 'setting', 'already', chat.lang) });
-                }
-          
-                await changeField(interaction.guildId, 'gen', newGen);
-                return await interaction.editReply(getLocale(answers, 'setting', syntax ? 'genering_syntax' : 'genering_default', chat.lang));
-              case 'talk':
-                const talk = interaction.options.get('value').value;
-                const newTalk = talk ? 1 : 0;
-                if (chat['talk'] === newTalk) {
-                  return await interaction.editReply({ content: getLocale(answers, 'setting', 'already', chat.lang) });
-                }
-          
-                await changeField(interaction.guildId, 'talk', newTalk);
-                return await interaction.editReply(getLocale(answers, 'setting', talk ? 'access_write' : 'denied_write', chat.lang));
-              case 'wipe':
-                const wipe = interaction.options.get('action').value;
-                if (wipe === 'clear') {
-                  await clearText(interaction.guildId);
-                  return await interaction.editReply(getLocale(answers, 'setting', 'success_wipe', chat.lang));
-                }
+
+            if (dbErrorOccurred) {
+                const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred fetching current settings.";
+                return await interaction.editReply({ content: dbErrorMessage });
             }
-          }
+
+            const subcommand = interaction.options.getSubcommand();
+            let successMessage = null;
+            let errorMessage = null;
+            let dbField = null;
+            let dbValue = null;
+
+            try {
+                switch (subcommand) {
+                    case 'speed': {
+                        const speed = interaction.options.getInteger('int', true);
+                        if (speed < MIN_SPEED || speed > MAX_SPEED) {
+                             errorMessage = getLocale(answers, 'setting', 'speed_wrong', currentLang, MIN_SPEED, MAX_SPEED) || `Speed must be between ${MIN_SPEED} and ${MAX_SPEED}.`;
+                             break;
+                        }
+                        if (currentChat?.speed === speed) {
+                             errorMessage = getLocale(answers, 'setting', 'already', currentLang) || "This setting already has the selected value.";
+                             break;
+                        }
+                        dbField = 'speed';
+                        dbValue = speed;
+                        successMessage = getLocale(answers, 'setting', 'speed_changed', currentLang, speed) || `Speed changed to ${speed}.`;
+                        break;
+                    }
+                    case 'syntax': {
+                        const syntax = interaction.options.getBoolean('bool', true);
+                        const newGen = syntax ? 1 : 0;
+                        if (currentChat?.gen === newGen) {
+                            errorMessage = getLocale(answers, 'setting', 'already', currentLang) || "This setting already has the selected value.";
+                            break;
+                        }
+                        dbField = 'gen';
+                        dbValue = newGen;
+                        const localeKey = syntax ? 'genering_syntax' : 'genering_default';
+                        successMessage = getLocale(answers, 'setting', localeKey, currentLang) || (syntax ? "Generation mode set to literate." : "Generation mode set to default.");
+                        break;
+                    }
+                    case 'talk': {
+                        const talk = interaction.options.getBoolean('value', true);
+                        const newTalk = talk ? 1 : 0;
+                         if (currentChat?.talk === newTalk) {
+                            errorMessage = getLocale(answers, 'setting', 'already', currentLang) || "This setting already has the selected value.";
+                            break;
+                        }
+                        dbField = 'talk';
+                        dbValue = newTalk;
+                        const localeKey = talk ? 'access_write' : 'denied_write';
+                        successMessage = getLocale(answers, 'setting', localeKey, currentLang) || (talk ? "Bot will now respond automatically." : "Bot will now only respond when mentioned or using prefix.");
+                        break;
+                    }
+                    case 'wipe': {
+                        const action = interaction.options.getString('action', true);
+                        if (action === 'clear') {
+                            try {
+                                 await clearText(interaction.guildId);
+                                 successMessage = getLocale(answers, 'setting', 'success_wipe', currentLang) || "Textbase successfully wiped.";
+                            } catch (wipeError) {
+                                 console.error(`DB error wiping textbase for guild ${interaction.guildId}:`, wipeError);
+                                 errorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "Database error during wipe operation.";
+                             }
+                         } else {
+                             errorMessage = "Invalid wipe action.";
+                         }
+                         break;
+                    }
+                    default:
+                         errorMessage = "Unknown setting subcommand.";
+                         break;
+                }
+
+                if (errorMessage) {
+                    return await interaction.editReply({ content: errorMessage });
+                }
+
+                if (subcommand === 'wipe') {
+                     if (successMessage) {
+                         return await interaction.editReply({ content: successMessage });
+                     } else {
+                         return await interaction.editReply({ content: errorMessage || "An error occurred during wipe." });
+                     }
+                }
+
+                if (dbField !== null && dbValue !== null) {
+                     await changeField(interaction.guildId, dbField, dbValue);
+                     const finalMessage = successMessage || "Setting updated successfully.";
+                     await interaction.editReply({ content: finalMessage });
+                } else if (subcommand !== 'wipe') {
+                     console.error(`Setting command reached end without action for ${subcommand} in guild ${interaction.guildId}`);
+                     await interaction.editReply({ content: "An internal error occurred processing the setting." });
+                }
+
+            } catch (dbChangeError) {
+                 console.error(`DB error applying setting change (${subcommand}) for guild ${interaction.guildId}:`, dbChangeError);
+                 const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred while changing the setting.";
+                 await interaction.editReply({ content: dbErrorMessage });
+            }
+        } catch (error) {
+            console.error(`Error executing setting command for guild ${interaction.guildId}:`, error);
+             if (interaction.deferred || interaction.replied) {
+                 try {
+                     await interaction.editReply({ content: "An unexpected error occurred." });
+                 } catch (editError) {
+                     console.error("Failed to send final error reply for setting command:", editError);
+                 }
+             }
+        }
+    }
 };
 
