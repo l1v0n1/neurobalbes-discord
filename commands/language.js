@@ -33,29 +33,39 @@ export default {
 			// Get current language for response
 			const currentLang = await getLanguage(guildId);
 			
+			// If it's the same language, notify user (use proper language)
+			if (currentLang === newLang) {
+				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
+				const langName = answers.language.translate[newLang] || newLang;
+				return await interaction.reply({
+					content: alreadyMessage.replace('%VAR%', langName),
+					ephemeral: true
+				});
+			}
+			
 			// Update language in database
 			await updateLanguage(guildId, newLang);
 			
 			// Get the localized language name for the chosen language
-			const languageName = answers.language.translate[newLang] || newLang;
+			const languageName = answers.language.translate[newLang];
 			
 			// Send confirmation message in the selected language, replacing %VAR% with the language name
 			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
 			responseMessage = responseMessage.replace('%VAR%', languageName);
 			
-			// Let bot.js handle the deferred reply automatically - don't manually reply
-			await interaction.editReply({
-				content: responseMessage
+			// Reply with ephemeral message
+			await interaction.reply({
+				content: responseMessage,
+				ephemeral: true
 			});
 		} catch (error) {
 			console.error('Error in language command:', error);
 			const errorMessage = answers.common?.database_error?.en || 'An error occurred. Please try again later.';
 			
-			if (interaction.deferred) {
-				await interaction.editReply({ content: errorMessage });
-			} else {
-				await interaction.reply({ content: errorMessage, ephemeral: true });
-			}
+			await interaction.reply({ 
+				content: errorMessage, 
+				ephemeral: true 
+			});
 		}
 	}
 };

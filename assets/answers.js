@@ -56,8 +56,8 @@ const answers = {
         "translate": {
             "ru": "Русский",
             "en": "English",
-            "uk": "Український",
-            "tr": "Türk"
+            "uk": "Українська",
+            "tr": "Türkçe"
         },
         "already": {
             "ru": "Язык и так уже %VAR%",
