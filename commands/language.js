@@ -15,6 +15,8 @@ export default {
 					{ name: 'Русский', value: 'ru' },
 					{ name: 'Українська', value: 'ua' }
 				)),
+	// Set as ephemeral by default
+	ephemeral: true,
 	async execute(interaction) {
 		try {
 			if (!interaction.guild) {
@@ -36,14 +38,19 @@ export default {
 			// Send confirmation message in the selected language
 			const responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
 			
-			return interaction.reply({
-				content: responseMessage,
-				ephemeral: true
+			// Let bot.js handle the deferred reply automatically - don't manually reply
+			await interaction.editReply({
+				content: responseMessage
 			});
 		} catch (error) {
 			console.error('Error in language command:', error);
 			const errorMessage = answers.common?.database_error?.en || 'An error occurred. Please try again later.';
-			return interaction.reply({ content: errorMessage, ephemeral: true });
+			
+			if (interaction.deferred) {
+				await interaction.editReply({ content: errorMessage });
+			} else {
+				await interaction.reply({ content: errorMessage, ephemeral: true });
+			}
 		}
 	}
 };

@@ -50,6 +50,8 @@ export default {
           { name: languages.gen.quote['en-US'], value: 'quote', name_localizations: languages.gen.quote }
         )
     ),
+  // Set ephemeral to true to make responses only visible to the user
+  ephemeral: true,
   async execute(interaction) {
     if (!interaction.guildId) {
       // Inform user it's guild-only
@@ -61,7 +63,7 @@ export default {
       return;
     }
 
-    await interaction.reply({ content: '⏳', ephemeral: true }); // Make initial reply ephemeral
+    // Remove the manual reply - bot.js already handles deferring
     const type = interaction.options.getString('type'); // Use getString for clarity
     let chat;
     let lang = 'en-US'; // Default language

@@ -80,6 +80,7 @@ export default {
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setDMPermission(false),
+    ephemeral: true,
     async execute(interaction) {
          if (!interaction.guildId) {
              try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
@@ -91,8 +92,6 @@ export default {
         let dbErrorOccurred = false;
 
         try {
-            await interaction.deferReply({ ephemeral: true });
-
             try {
                 currentChat = await getChat(interaction.guildId);
                 currentLang = currentChat?.lang || 'en-US';
@@ -103,12 +102,12 @@ export default {
 
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                  const denyMessage = getLocale(answers, 'common', 'access_denied', currentLang) || "You do not have permission to use this command.";
-                 return await interaction.editReply({ content: denyMessage });
+                 return await interaction.reply({ content: denyMessage });
             }
 
             if (dbErrorOccurred) {
                 const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred fetching current settings.";
-                return await interaction.editReply({ content: dbErrorMessage });
+                return await interaction.reply({ content: dbErrorMessage });
             }
 
             const subcommand = interaction.options.getSubcommand();
@@ -181,36 +180,36 @@ export default {
                 }
 
                 if (errorMessage) {
-                    return await interaction.editReply({ content: errorMessage });
+                    return await interaction.reply({ content: errorMessage });
                 }
 
                 if (subcommand === 'wipe') {
                      if (successMessage) {
-                         return await interaction.editReply({ content: successMessage });
+                         return await interaction.reply({ content: successMessage });
                      } else {
-                         return await interaction.editReply({ content: errorMessage || "An error occurred during wipe." });
+                         return await interaction.reply({ content: errorMessage || "An error occurred during wipe." });
                      }
                 }
 
                 if (dbField !== null && dbValue !== null) {
                      await changeField(interaction.guildId, dbField, dbValue);
                      const finalMessage = successMessage || "Setting updated successfully.";
-                     await interaction.editReply({ content: finalMessage });
+                     await interaction.reply({ content: finalMessage });
                 } else if (subcommand !== 'wipe') {
                      console.error(`Setting command reached end without action for ${subcommand} in guild ${interaction.guildId}`);
-                     await interaction.editReply({ content: "An internal error occurred processing the setting." });
+                     await interaction.reply({ content: "An internal error occurred processing the setting." });
                 }
 
             } catch (dbChangeError) {
                  console.error(`DB error applying setting change (${subcommand}) for guild ${interaction.guildId}:`, dbChangeError);
                  const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred while changing the setting.";
-                 await interaction.editReply({ content: dbErrorMessage });
+                 await interaction.reply({ content: dbErrorMessage });
             }
         } catch (error) {
             console.error(`Error executing setting command for guild ${interaction.guildId}:`, error);
              if (interaction.deferred || interaction.replied) {
                  try {
-                     await interaction.editReply({ content: "An unexpected error occurred." });
+                     await interaction.reply({ content: "An unexpected error occurred." });
                  } catch (editError) {
                      console.error("Failed to send final error reply for setting command:", editError);
                  }
