@@ -20,10 +20,12 @@ export default {
 	ephemeral: true,
 	async execute(interaction) {
 		try {
+			// Defer the reply immediately to prevent timeouts
+			await interaction.deferReply({ ephemeral: true });
+			
 			if (!interaction.guild) {
-				return interaction.reply({ 
-					content: 'This command can only be used in a server.',
-					ephemeral: true 
+				return interaction.editReply({ 
+					content: 'This command can only be used in a server.'
 				});
 			}
 
@@ -37,9 +39,8 @@ export default {
 			if (currentLang === newLang) {
 				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
 				const langName = answers.language.translate[newLang] || newLang;
-				return await interaction.reply({
-					content: alreadyMessage.replace('%VAR%', langName),
-					ephemeral: true
+				return await interaction.editReply({
+					content: alreadyMessage.replace('%VAR%', langName)
 				});
 			}
 			
@@ -53,19 +54,20 @@ export default {
 			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
 			responseMessage = responseMessage.replace('%VAR%', languageName);
 			
-			// Reply with ephemeral message
-			await interaction.reply({
-				content: responseMessage,
-				ephemeral: true
+			// Edit the deferred reply
+			await interaction.editReply({
+				content: responseMessage
 			});
 		} catch (error) {
 			console.error('Error in language command:', error);
 			const errorMessage = answers.common?.database_error?.en || 'An error occurred. Please try again later.';
 			
-			await interaction.reply({ 
-				content: errorMessage, 
-				ephemeral: true 
-			});
+			// Make sure we handle this even if the interaction hasn't been deferred
+			if (interaction.deferred) {
+				await interaction.editReply({ content: errorMessage });
+			} else {
+				await interaction.reply({ content: errorMessage, ephemeral: true });
+			}
 		}
 	}
 };
