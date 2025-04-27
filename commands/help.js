@@ -36,7 +36,7 @@ export default {
             } else {
                 return interaction.reply({
                     embeds: [helpEmbed],
-                    flags: { ephemeral: true }
+                    ephemeral: true
                 });
             }
         } catch (error) {
@@ -49,7 +49,7 @@ export default {
             } else if (!interaction.replied) {
                 return interaction.reply({ 
                     content: 'An error occurred while retrieving help information. Please try again later.',
-                    flags: { ephemeral: true }
+                    ephemeral: true
                 });
             }
         }

@@ -25,8 +25,6 @@ export default {
 
         let lang = 'en-US';
         try {
-            await interaction.deferReply();
-
             const phrase = interaction.options.getString("phrase", true);
             let chat;
             try {

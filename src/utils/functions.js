@@ -25,7 +25,13 @@ function isURL(str) {
 }
 
 function getLocaleWithoutString(strings, command, language, ...vars) {
-  let locale = strings[command][language];
+  // Check if command exists in strings
+  if (!strings[command]) return null;
+  
+  // Check if language exists in the command
+  let locale = strings[command][language] || strings[command]['en']; // fallback to English
+  if (!locale) return null;
+  
   let count = 0;
   locale = locale.replace(/%VAR%/g, () => (vars[count] !== null ? vars[count] : "%VAR%"));
 
@@ -33,7 +39,18 @@ function getLocaleWithoutString(strings, command, language, ...vars) {
 }
 
 function getLocale(strings, command, string, language, ...vars) {
-  let locale = strings[command][string][language];
+  // Check if the necessary structure exists
+  if (!strings || !strings[command] || !strings[command][string]) {
+    return null;
+  }
+  
+  // Get the locale string, fallback to English if the language doesn't exist
+  let locale = strings[command][string][language] || strings[command][string]['en'];
+  
+  // If still no locale, return null
+  if (!locale) {
+    return null;
+  }
 
   let count = 0;
 
