@@ -1,5 +1,95 @@
 # Neurobalbes Discord Bot
 
+An advanced Discord bot using Markov chains for message generation.
+
+## Setup
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/l1v0n1/neurobalbes-discord.git
+   cd neurobalbes-discord
+   ```
+
+2. Install dependencies:
+   ```
+   npm install --omit=optional
+   ```
+
+3. For voice functionality (optional):
+   ```
+   npm run voice:install
+   ```
+
+4. Create a config.json file:
+   ```json
+   {
+     "token": "YOUR_BOT_TOKEN_HERE",
+     "bot_description": "Neurobalbes | /help",
+     "prefix": "/",
+     "clientId": "YOUR_CLIENT_ID_HERE",
+     "inviteLink": "YOUR_BOT_INVITE_LINK",
+     "serverLink": "YOUR_SUPPORT_SERVER_LINK",
+     "adminId": "YOUR_ADMIN_ID",
+     "site": "https://your-bot-website.com",
+     "raw_limit": 2000,
+     "shardCount": "auto",
+     "shardArgs": ["--max-old-space-size=2048"]
+   }
+   ```
+
+5. Verify your installation:
+   ```
+   npm run check-install
+   ```
+
+6. Start the bot:
+   ```
+   npm start
+   ```
+
+For development:
+   ```
+   npm run dev
+   ```
+
+## Quick Start with Deployment Script
+
+You can also use the provided deployment script which will guide you through the setup process:
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+The script will:
+1. Check if your configuration is valid
+2. Install dependencies
+3. Install voice dependencies if requested
+4. Verify the installation
+5. Start the bot with your preferred method (normal or PM2)
+
+## Commands
+
+- **/help** - Shows available commands
+- **/gen** - Generates a message using Markov chains
+- **/gendem** - Generates a message with different settings
+- **/continue** - Continues a message thread
+- **/voice** - Voice channel interactions (requires voice dependencies)
+- **/setting** - Configure bot settings
+- **/language** - Change bot language
+- **/delete** - Delete learned data
+- **/stats** - View bot statistics
+- **/info** - Get bot information
+- **/shards** - View shard information
+
+## Requirements
+
+- Node.js 16.9.0 or higher
+
+## License
+
+MIT
+
 [English](#english) | [Русский](#русский)
 
 ## English

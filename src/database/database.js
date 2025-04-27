@@ -1,5 +1,5 @@
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 
 // Connection pool implementation
 class ConnectionPool {
@@ -154,7 +154,7 @@ async function createTable(chatid) {
         await db.exec(`
             CREATE TABLE IF NOT EXISTS ${tableName} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                peer_id TEXT DEFAULT '${chatid}', // Store as TEXT if using validated string ID
+                peer_id TEXT DEFAULT '${chatid}', 
                 talk INT DEFAULT 1,
                 gen INT DEFAULT 0,
                 speed INT DEFAULT 3,
@@ -302,6 +302,9 @@ async function updateText(chatid, text) {
     });
 }
 
+// Define allowed fields to prevent SQL injection
+const ALLOWED_FIELDS_TO_CHANGE = ['talk', 'gen', 'speed', 'lang'];
+
 async function changeField(chatid, field, key) {
     if (!isValidChatId(chatid)) {
         throw new Error(`Invalid chat ID format: ${chatid}`);
@@ -389,15 +392,16 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-module.exports = {
+// Export functions
+export {
     insert,
     getChat,
+    chatExists,
+    deleteFirst,
     updateText,
     changeField,
     clearText,
     sender,
-    chatExists,
     deleteNulls,
-    remove,
-    deleteFirst,
+    remove
 };

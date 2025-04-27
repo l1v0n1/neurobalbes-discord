@@ -1,10 +1,10 @@
-const { SlashCommandBuilder } = require('discord.js');
-const { getChat } = require('../database')
-const { contains, choice, getLocale } = require('../functions');
-const { languages } = require('../assets/descriptions');
-const { answers } = require('../assets/answers');
+import { SlashCommandBuilder } from 'discord.js';
+import { getChat } from '../src/database/database.js';
+import { contains, choice, getLocale } from '../src/utils/functions.js';
+import { languages } from '../assets/descriptions.js';
+import { answers } from '../assets/answers.js';
 
-module.exports = {
+export default {
 	data: new SlashCommandBuilder()
 		.setName('continue')
 		.setDescription(languages.continue.main['en-US'])

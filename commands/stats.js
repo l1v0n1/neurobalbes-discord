@@ -1,12 +1,13 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { languages } = require('../assets/descriptions');
-const { answers } = require('../assets/answers');
-const { getLocale } = require('../functions');
+import {  SlashCommandBuilder, EmbedBuilder  } from 'discord.js';
+import {  languages  } from '../assets/descriptions.js';
+import {  answers  } from '../assets/answers.js';
+import {  getLocale  } from '../src/utils/functions.js';
 
 // Attempt to load config, handle if missing
 let config = { adminId: null, inviteLink: null, serverLink: null };
 try {
-	config = require('../config.json');
+  const configModule = await import('../config.json', { with: { type: 'json' } });
+  config  = configModule.default;
 	// Ensure required keys exist, provide defaults or mark as missing
 	config.adminId = config.adminId || null;
 	config.inviteLink = config.inviteLink || null;
@@ -18,17 +19,20 @@ try {
 	// Config retains default null values
 }
 
-module.exports = {
+export default {
 	data: new SlashCommandBuilder()
 		.setName('stats')
 		.setDescription('Shows bot statistics (Admin only)')
 		.setDescriptionLocalizations(languages.stats.main)
 		.setDMPermission(false),
+	// Let the central handler in bot.js manage deferrals
+	ephemeral: true,
 	async execute(interaction) {
 		let lang = 'en-US'; // Default lang
 
 		try {
-			await interaction.deferReply({ ephemeral: true });
+			// The deferReply is now handled in bot.js
+			// No need to call it here again
 
 			// --- Config & Permission Checks ---
 			if (!config.adminId) {

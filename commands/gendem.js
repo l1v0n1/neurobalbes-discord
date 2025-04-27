@@ -1,10 +1,10 @@
-const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
-const { demotivatorImage } = require('../demotivator');
-const { getChat } = require('../database');
-const Markov  = require('../markov.js');
-const { languages } = require('../assets/descriptions');
-const { getLocale } = require('../functions');
-const { answers } = require('../assets/answers');
+import {  SlashCommandBuilder, AttachmentBuilder  } from 'discord.js';
+import {  demotivatorImage  } from '../src/utils/demotivator.js';
+import {  getChat  } from '../src/database/database.js';
+import Markov  from '../src/utils/markov.js';
+import {  languages  } from '../assets/descriptions.js';
+import {  getLocale  } from '../src/utils/functions.js';
+import {  answers  } from '../assets/answers.js';
 
 // Cooldown management (Note: This is global per user across all guilds)
 const userCooldowns = new Map(); // Map<UserId, Timestamp>
@@ -14,7 +14,7 @@ const COOLDOWN_TIME_MS = 15000; // 15 seconds
 const TITLE_MAX_LENGTH = 25;
 const TEXT_MAX_LENGTH = 30;
 
-module.exports = {
+export default {
   data: new SlashCommandBuilder()
     .setName('gendem')
     .setDescription(languages.gendem.main['en-US'])

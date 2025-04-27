@@ -1,9 +1,9 @@
-const { SlashCommandBuilder, Util } = require('discord.js');
-const { getChat } = require('../database');
-const Markov = require('../markov.js');
-const { getLocaleWithoutString, getLocale, randomInteger } = require('../functions');
-const { languages } = require('../assets/descriptions');
-const { answers } = require('../assets/answers');
+import {  SlashCommandBuilder  } from 'discord.js';
+import {  getChat  } from '../src/database/database.js';
+import Markov from '../src/utils/markov.js';
+import {  getLocaleWithoutString, getLocale, randomInteger  } from '../src/utils/functions.js';
+import {  languages  } from '../assets/descriptions.js';
+import {  answers  } from '../assets/answers.js';
 
 // Constants for generation parameters
 const LONG_TEXT_LENGTH = 400;
@@ -28,7 +28,7 @@ function safeGenerate(chain, method, ...args) {
     }
 }
 
-module.exports = {
+export default {
   data: new SlashCommandBuilder()
     .setName('gen')
     .setDescription(languages.gen.main['en-US'])
@@ -182,8 +182,10 @@ module.exports = {
     }
 
     try {
-      // Truncate reply if it exceeds Discord's limit
-      const finalReply = Util.splitMessage(reply, { maxLength: MAX_REPLY_LENGTH, char: '\n' })[0];
+      // Manually truncate reply if it exceeds Discord's limit instead of using Util.splitMessage
+      const finalReply = reply.length > MAX_REPLY_LENGTH 
+        ? reply.substring(0, MAX_REPLY_LENGTH) 
+        : reply;
       await interaction.editReply(finalReply);
     } catch (replyError) {
       console.error(`Failed to send final reply for guild ${interaction.guildId}:`, replyError);

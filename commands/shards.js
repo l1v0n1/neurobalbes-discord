@@ -1,10 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder, Status } = require('discord.js');
-const { languages } = require('../assets/descriptions');
+import {  SlashCommandBuilder, EmbedBuilder, Status  } from 'discord.js';
+import {  languages  } from '../assets/descriptions.js';
 
 // Attempt to load adminId, handle if config.json or key is missing
 let adminId = null;
 try {
-	adminId = require('../config.json').adminId;
+  const configModule = await import('../config.json', { with: { type: 'json' } });
+  adminId  = configModule.default.adminId;
 } catch (error) {
 	if (error.code !== 'MODULE_NOT_FOUND') {
 		console.error("Error loading adminId from config.json:", error);
@@ -23,7 +24,7 @@ const statusMap = {
 	// Add other statuses if necessary
 };
 
-module.exports = {
+export default {
 	data: new SlashCommandBuilder()
 		.setName('shards')
 		.setDescription('Shows information about bot shards (Admin only)')

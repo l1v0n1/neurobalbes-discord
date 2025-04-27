@@ -11,3 +11,15 @@ config.json
 
 # OS generated files
 .DS_Store 
+
+# Environment variables
+.env
+
+# Database
+data.db*
+
+# PM2
+.pm2/
+
+# PM2 logs
+pm2.log

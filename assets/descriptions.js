@@ -1,4 +1,4 @@
-let languages = {
+const languages = {
     "delete": {
         "main": {
             "ru": "Удаление из базы данных определенных элементов",
@@ -296,6 +296,4 @@ let languages = {
     },
 }
 
-
-
-module.exports.languages = languages;
+export { languages };

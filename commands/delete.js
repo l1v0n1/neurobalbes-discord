@@ -1,10 +1,10 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const { remove, getChat } = require('../database')
-const { languages } = require('../assets/descriptions');
-const { answers } = require('../assets/answers');
-const { getLocale } = require('../functions');
+import { SlashCommandBuilder, PermissionsBitField } from 'discord.js';
+import { remove, getChat } from '../src/database/database.js';
+import { languages } from '../assets/descriptions.js';
+import { answers } from '../assets/answers.js';
+import { getLocale } from '../src/utils/functions.js';
 
-module.exports = {
+export default {
 	data: new SlashCommandBuilder()
 		.setName('delete')
 		.setDescription(languages.delete.main['en-US'])

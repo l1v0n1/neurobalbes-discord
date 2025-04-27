@@ -1,6 +1,6 @@
 {
   "name": "neurobalbes-discord",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Neurobalbes Discord Bot - An advanced bot using Markov chains for message generation",
   "main": "src/core/shard.js",
   "scripts": {
@@ -11,7 +11,9 @@
     "start:pm2": "pm2 start src/core/shard.js --name neurobalbes",
     "stop:pm2": "pm2 stop neurobalbes",
     "restart:pm2": "pm2 restart neurobalbes",
-    "logs:pm2": "pm2 logs neurobalbes"
+    "logs:pm2": "pm2 logs neurobalbes",
+    "voice:install": "npm install @discordjs/opus@0.9.0 @discordjs/voice@0.18.0 libsodium-wrappers@0.7.15 ffmpeg-static@5.2.0",
+    "check-install": "node install-test.js"
   },
   "repository": {
     "type": "git",
@@ -27,18 +29,20 @@
   "author": "l1v0n1",
   "license": "MIT",
   "dependencies": {
-    "@discordjs/opus": "^0.9.0",
-    "@discordjs/voice": "^0.16.1",
     "canvas": "^2.11.2",
-    "discord-hybrid-sharding": "^2.1.4",
-    "discord.js": "^14.14.1",
-    "ffmpeg-static": "^5.2.0",
-    "libsodium-wrappers": "^0.7.13",
+    "discord-hybrid-sharding": "^2.2.6",
+    "discord.js": "^14.19.1",
+    "node-fetch": "^3.3.2",
+    "pm2": "^5.3.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "node-fetch": "^2.7.0",
-    "winston": "^3.11.0",
-    "pm2": "^5.3.1"
+    "winston": "^3.17.0"
+  },
+  "optionalDependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "@discordjs/voice": "^0.18.0",
+    "ffmpeg-static": "^5.2.0",
+    "libsodium-wrappers": "^0.7.15"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
@@ -47,5 +51,6 @@
   },
   "engines": {
     "node": ">=16.9.0"
-  }
+  },
+  "type": "module"
 }

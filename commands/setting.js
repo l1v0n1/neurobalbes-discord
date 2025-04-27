@@ -1,12 +1,13 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const { answers } = require('../assets/answers');
-const { languages } = require('../assets/descriptions');
-const { changeField, getChat, clearText } = require('../database');
-const { getLocale } = require('../functions');
+import {  SlashCommandBuilder, PermissionsBitField  } from 'discord.js';
+import {  answers  } from '../assets/answers.js';
+import {  languages  } from '../assets/descriptions.js';
+import {  changeField, getChat, clearText  } from '../src/database/database.js';
+import {  getLocale  } from '../src/utils/functions.js';
 
 let prefix = '?';
 try {
-  prefix = require('../config.json').prefix || prefix;
+  const configModule = await import('../config.json', { with: { type: 'json' } });
+  prefix = configModule.default.prefix || prefix;
 } catch (error) {
   if (error.code !== 'MODULE_NOT_FOUND') {
     console.error("Error loading prefix from config.json:", error);
@@ -16,7 +17,7 @@ try {
 const MIN_SPEED = 1;
 const MAX_SPEED = 10;
 
-module.exports = {
+export default {
     data: new SlashCommandBuilder()
         .setName('setting')
         .setDescription(languages.setting.main['en-US'])

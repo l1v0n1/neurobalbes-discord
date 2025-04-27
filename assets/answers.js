@@ -1,6 +1,13 @@
-const { raw_limit } = require('../config.json');
+let raw_limit;
+try {
+  const configModule = await import('../config.json', { with: { type: 'json' } });
+  raw_limit = configModule.default.raw_limit;
+} catch (error) {
+  console.error("Error importing from config.json:", error);
+  raw_limit = 2000; // Default value
+}
 
-let answers = {
+const answers = {
     "access_denied": {
         "ru": "Чтобы сделать это, нужны права администратора на сервере",
         "en": "To do this, you need administrator rights on the server",
@@ -104,6 +111,64 @@ let answers = {
                 "— Söyle bana Sergey, dairede başka birinin olduğunu nasıl anladın?\n— %VAR%"
             ]
             
+        }
+    },
+    "help": {
+        "no_commands": {
+            "ru": "Не найдено доступных команд.",
+            "en": "No available commands found.",
+            "uk": "Не знайдено доступних команд.",
+            "tr": "Kullanılabilir komut bulunamadı."
+        },
+        "title": {
+            "ru": "Справка по командам",
+            "en": "Command Help",
+            "uk": "Довідка по командах",
+            "tr": "Komut Yardımı"
+        },
+        "description": {
+            "ru": "Доступные команды бота:",
+            "en": "Available bot commands:",
+            "uk": "Доступні команди бота:",
+            "tr": "Kullanılabilir bot komutları:"
+        },
+        "chat": {
+            "ru": "Настройки бота и генерации текста",
+            "en": "Bot settings and text generation",
+            "uk": "Налаштування бота та генерація тексту",
+            "tr": "Bot ayarları ve metin oluşturma"
+        },
+        "voice": {
+            "ru": "Взаимодействие с голосовыми каналами",
+            "en": "Voice channel interaction",
+            "uk": "Взаємодія з голосовими каналами",
+            "tr": "Ses kanalı etkileşimi"
+        },
+        "language": {
+            "ru": "Изменить язык бота",
+            "en": "Change bot language",
+            "uk": "Змінити мову бота",
+            "tr": "Bot dilini değiştir"
+        },
+        "help": {
+            "ru": "Показать это сообщение",
+            "en": "Show this message",
+            "uk": "Показати це повідомлення",
+            "tr": "Bu mesajı göster"
+        }
+    },
+    "common": {
+        "database_error": {
+            "ru": "Произошла ошибка при доступе к базе данных. Пожалуйста, попробуйте позже.",
+            "en": "A database error occurred. Please try again later.",
+            "uk": "Сталася помилка під час доступу до бази даних. Будь ласка, спробуйте пізніше.",
+            "tr": "Bir veritabanı hatası oluştu. Lütfen daha sonra tekrar deneyin."
+        },
+        "general_error": {
+            "ru": "Произошла ошибка. Пожалуйста, попробуйте позже.",
+            "en": "An error occurred. Please try again later.",
+            "uk": "Сталася помилка. Будь ласка, спробуйте пізніше.",
+            "tr": "Bir hata oluştu. Lütfen daha sonra tekrar deneyin."
         }
     },
     "info": {
@@ -213,6 +278,30 @@ let answers = {
             "uk": "Ви не знаходитесь в жодному голосовому каналі",
             "tr": "Herhangi bir ses kanalında değilsiniz"
         },
+        "not_in_voice": {
+            "ru": "Вы должны находиться в голосовом канале, чтобы использовать эту команду",
+            "en": "You must be in a voice channel to use this command",
+            "uk": "Ви повинні знаходитись у голосовому каналі, щоб використовувати цю команду",
+            "tr": "Bu komutu kullanmak için bir ses kanalında olmalısınız"
+        },
+        "no_prompt": {
+            "ru": "Пожалуйста, укажите текст, который вы хотите услышать",
+            "en": "Please provide text that you would like to hear",
+            "uk": "Будь ласка, вкажіть текст, який ви хочете почути",
+            "tr": "Lütfen duymak istediğiniz metni girin"
+        },
+        "success": {
+            "ru": "Воспроизвожу сообщение в голосовом канале",
+            "en": "Playing message in voice channel",
+            "uk": "Відтворюю повідомлення в голосовому каналі",
+            "tr": "Ses kanalında mesaj çalma"
+        },
+        "error": {
+            "ru": "Произошла ошибка при обработке голосового запроса",
+            "en": "An error occurred while processing your voice request",
+            "uk": "Сталася помилка під час обробки голосового запиту",
+            "tr": "Sesli isteğiniz işlenirken bir hata oluştu"
+        },
         "start_voice": {
             "ru": "Начинаю общение в **%VAR%**",
             "en": "Starting a conversation at **%VAR%**",
@@ -225,13 +314,13 @@ let answers = {
             "uk": "Я не знаходжусь у жодному голосовому каналі",
             "tr": "Herhangi bir ses kanalında değilim"
         },
-        "disconnect": {
-            "ru": "Отключился от **%VAR%**",
-            "en": "Disconnected from **%VAR%**",
-            "uk": "Відключився від **%VAR%**",
-            "tr": "**%VAR%** ile bağlantı kesildi"
+        "stop_voice": {
+            "ru": "Отключился от голосового канала",
+            "en": "Disconnected from voice channel",
+            "uk": "Відключився від голосового каналу",
+            "tr": "Ses kanalından bağlantı kesildi"
         }
     },
-}
+};
 
-module.exports.answers = answers;
+export { answers };

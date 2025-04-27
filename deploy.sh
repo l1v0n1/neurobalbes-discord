@@ -1,132 +1,145 @@
 #!/bin/bash
 
-# Colors for output
+# Neurobalbes Discord Bot deployment script
+# This script is used to deploy the bot on a server
+
+# Colors for terminal output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting Neurobalbes Discord Bot deployment...${NC}"
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}Node.js is not installed. Please install Node.js version 16.9.0 or higher.${NC}"
+    echo -e "${RED}Node.js is not installed. Please install Node.js 16.9.0 or higher.${NC}"
     exit 1
 fi
 
 # Check Node.js version
-NODE_VERSION=$(node -v | cut -d'v' -f2)
-if [ "$(printf '%s\n' "16.9.0" "$NODE_VERSION" | sort -V | head -n1)" = "16.9.0" ]; then
-    echo -e "${GREEN}Node.js version $NODE_VERSION is compatible.${NC}"
-else
-    echo -e "${RED}Node.js version must be 16.9.0 or higher. Current version: $NODE_VERSION${NC}"
+NODE_VERSION=$(node -v | cut -d 'v' -f 2)
+REQUIRED_VERSION="16.9.0"
+
+if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$NODE_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
+    echo -e "${RED}Node.js version must be at least $REQUIRED_VERSION. Current version: $NODE_VERSION${NC}"
     exit 1
 fi
 
-# Function to check if running on Apple Silicon
-is_apple_silicon() {
-    if [[ "$(uname -m)" == "arm64" ]]; then
-        return 0
-    else
-        return 1
+# Function to check if config exists
+check_config() {
+    if [ ! -f "config.json" ]; then
+        echo -e "${RED}config.json not found!${NC}"
+        echo -e "${YELLOW}Creating template config.json...${NC}"
+        cat > config.json << EOL
+{
+    "token": "YOUR_BOT_TOKEN_HERE",
+    "bot_description": "Neurobalbes | /help",
+    "prefix": "/",
+    "clientId": "YOUR_CLIENT_ID_HERE",
+    "inviteLink": "YOUR_BOT_INVITE_LINK",
+    "serverLink": "YOUR_SUPPORT_SERVER_LINK",
+    "adminId": "YOUR_ADMIN_ID",
+    "site": "https://your-bot-website.com",
+    "raw_limit": 2000,
+    "shardCount": "auto",
+    "shardArgs": ["--max-old-space-size=2048"]
+}
+EOL
+        echo -e "${RED}Please edit config.json with your bot token and client ID, then run this script again.${NC}"
+        exit 1
+    fi
+
+    # Check if token is set
+    TOKEN=$(grep -o '"token": "[^"]*"' config.json | cut -d '"' -f 4)
+    if [ "$TOKEN" = "YOUR_BOT_TOKEN_HERE" ]; then
+        echo -e "${RED}Please update the bot token in config.json${NC}"
+        exit 1
+    fi
+
+    # Check if client ID is set
+    CLIENT_ID=$(grep -o '"clientId": "[^"]*"' config.json | cut -d '"' -f 4)
+    if [ "$CLIENT_ID" = "YOUR_CLIENT_ID_HERE" ]; then
+        echo -e "${RED}Please update the client ID in config.json${NC}"
+        exit 1
     fi
 }
 
-# Function to install dependencies with special handling for Apple Silicon
-install_dependencies() {
-    if is_apple_silicon; then
-        echo -e "${YELLOW}Detected Apple Silicon (M1/M2). Using alternative dependencies...${NC}"
-        # Remove @discordjs/opus from package.json as it's not needed for basic functionality
-        sed -i '' '/"@discordjs\/opus"/d' package.json
-        # Install dependencies without optional dependencies
-        npm install --no-optional
+# Function to install dependencies
+install_deps() {
+    echo -e "${GREEN}Installing dependencies...${NC}"
+    # Explicitly use --omit=optional flag to avoid deprecation warnings
+    npm install --omit=optional
+    
+    # Ask if voice functionality is needed
+    echo -e "${YELLOW}Do you want to install voice functionality? (y/n)${NC}"
+    read -r install_voice
+    if [[ "$install_voice" == "y" || "$install_voice" == "Y" ]]; then
+        echo -e "${GREEN}Installing voice dependencies...${NC}"
+        npm run voice:install
     else
-        npm install
+        echo -e "${YELLOW}Voice functionality will be disabled.${NC}"
     fi
+    
+    # Run installation check
+    echo -e "${GREEN}Checking installation...${NC}"
+    node install-test.js
 }
 
-# Check if node_modules exists and package.json hasn't been modified
-if [ -d "node_modules" ]; then
-    PACKAGE_JSON_MODIFIED=$(find package.json -newer node_modules -print 2>/dev/null)
-    if [ -z "$PACKAGE_JSON_MODIFIED" ]; then
-        echo -e "${GREEN}Dependencies are already installed and up to date.${NC}"
-    else
-        echo -e "${YELLOW}package.json has been modified. Updating dependencies...${NC}"
-        install_dependencies
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to update dependencies.${NC}"
-            exit 1
+# Function to start the bot
+start_bot() {
+    echo -e "${GREEN}Starting the bot...${NC}"
+    
+    # Ask if PM2 should be used
+    echo -e "${YELLOW}Do you want to run the bot with PM2? (y/n)${NC}"
+    read -r use_pm2
+    
+    if [[ "$use_pm2" == "y" || "$use_pm2" == "Y" ]]; then
+        if ! command -v pm2 &> /dev/null; then
+            echo -e "${YELLOW}PM2 is not installed. Installing PM2...${NC}"
+            npm install -g pm2
         fi
-    fi
-else
-    echo -e "${YELLOW}Installing dependencies...${NC}"
-    install_dependencies
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Failed to install dependencies.${NC}"
-        exit 1
-    fi
-fi
-
-# Check if config.json exists
-if [ ! -f "config.json" ]; then
-    echo -e "${RED}config.json not found. Creating from example...${NC}"
-    if [ -f "config.example.json" ]; then
-        cp config.example.json config.json
-        echo -e "${GREEN}Created config.json. Please edit it with your bot token and settings.${NC}"
-        echo -e "${YELLOW}Please edit config.json before continuing.${NC}"
-        exit 1
+        
+        echo -e "${GREEN}Starting with PM2...${NC}"
+        npm run start:pm2
+        
+        echo -e "${GREEN}Bot is running with PM2. Use 'npm run logs:pm2' to view logs.${NC}"
+        echo -e "${YELLOW}To ensure PM2 starts on system boot, you may need to run:${NC}"
+        echo -e "${GREEN}pm2 startup${NC}"
+        echo -e "${GREEN}pm2 save${NC}"
     else
-        echo -e "${RED}config.example.json not found. Please create config.json manually.${NC}"
-        exit 1
-    fi
-fi
-
-# Try to install PM2 globally with sudo if needed
-install_pm2() {
-    if ! command -v pm2 &> /dev/null; then
-        echo -e "${YELLOW}Installing PM2 globally...${NC}"
-        if npm install -g pm2; then
-            echo -e "${GREEN}PM2 installed successfully.${NC}"
-        else
-            echo -e "${YELLOW}Trying to install PM2 with sudo...${NC}"
-            if sudo npm install -g pm2; then
-                echo -e "${GREEN}PM2 installed successfully with sudo.${NC}"
-            else
-                echo -e "${RED}Failed to install PM2. Please install it manually:${NC}"
-                echo -e "${YELLOW}sudo npm install -g pm2${NC}"
-                exit 1
-            fi
-        fi
-    else
-        echo -e "${GREEN}PM2 is already installed.${NC}"
+        echo -e "${GREEN}Starting normally...${NC}"
+        npm start
     fi
 }
 
-install_pm2
+# Main deployment process
+echo -e "${GREEN}Checking configuration...${NC}"
+check_config
+
+echo -e "${GREEN}Checking for updates...${NC}"
+git pull
+
+install_deps
 
 # Create logs directory if it doesn't exist
-mkdir -p logs
+if [ ! -d "logs" ]; then
+    echo -e "${YELLOW}Creating logs directory...${NC}"
+    mkdir -p logs
+fi
 
-# Start the bot with PM2
-echo -e "${GREEN}Starting bot with PM2...${NC}"
-pm2 start src/core/shard.js --name neurobalbes --log logs/app.log --time
+echo -e "${YELLOW}Installation complete. You can verify the installation at any time by running:${NC}"
+echo -e "${GREEN}npm run check-install${NC}"
 
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}Bot has been successfully deployed!${NC}"
-    echo -e "\nUse the following commands to manage the bot:"
-    echo -e "  ${GREEN}pm2 logs neurobalbes${NC} - View bot logs"
-    echo -e "  ${GREEN}pm2 stop neurobalbes${NC} - Stop the bot"
-    echo -e "  ${GREEN}pm2 restart neurobalbes${NC} - Restart the bot"
-    echo -e "  ${GREEN}pm2 monit${NC} - Monitor bot performance"
-    
-    # Save PM2 process list
-    echo -e "\n${YELLOW}Saving PM2 process list...${NC}"
-    pm2 save
-    
-    # Generate startup script
-    echo -e "${YELLOW}Setting up PM2 startup script...${NC}"
-    pm2 startup | tail -n 1
+echo -e "${YELLOW}Ready to start the bot? (y/n)${NC}"
+read -r start_now
+if [[ "$start_now" == "y" || "$start_now" == "Y" ]]; then
+    start_bot
 else
-    echo -e "${RED}Failed to start the bot.${NC}"
-    exit 1
-fi 
+    echo -e "${GREEN}You can start the bot later by running:${NC}"
+    echo -e "${GREEN}npm start${NC}"
+    echo -e "${GREEN}or${NC}"
+    echo -e "${GREEN}npm run start:pm2${NC}"
+fi
+
+echo -e "${GREEN}Deployment complete!${NC}" 

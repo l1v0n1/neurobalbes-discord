@@ -1,6 +1,10 @@
-const { ShardingManager } = require('discord.js');
-const path = require('path');
-const os = require('os');
+import { ShardingManager } from 'discord.js';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Safer config loading with defaults and fallbacks
 let config = {
@@ -10,8 +14,8 @@ let config = {
 };
 
 try {
-    const userConfig = require('../../config.json');
-    config = { ...config, ...userConfig };
+    const userConfig = await import('../../config.json', { with: { type: 'json' } });
+    config = { ...config, ...userConfig.default };
 } catch (error) {
     console.warn('Could not load config.json, using defaults and environment variables:', error.message);
 }
@@ -88,6 +92,27 @@ class CustomShardingManager extends ShardingManager {
                             shardStatus.guilds = message.guilds;
                         }
                     }
+                    // Handle ready message
+                    else if (message.type === 'READY') {
+                        console.log(`[Shard ${shard.id}] Ready message received directly from shard`);
+                        const status = this.status.get(shard.id);
+                        if (status) {
+                            status.status = 'ready';
+                            status.lastHeartbeat = Date.now();
+                        }
+                    }
+                    // Handle fatal error message
+                    else if (message.type === 'FATAL_ERROR') {
+                        console.error(`[Shard ${shard.id}] Fatal error received: ${message.error}`);
+                        const status = this.status.get(shard.id);
+                        if (status) {
+                            status.status = 'error';
+                            status.lastError = message.error;
+                        }
+                        
+                        // Don't immediately restart on fatal errors, 
+                        // wait for the process to exit naturally
+                    }
                 }
             });
         });
@@ -163,10 +188,43 @@ class CustomShardingManager extends ShardingManager {
             try {
                 setTimeout(async () => {
                     try {
-                        await shard.respawn({ delay: 1000 });
+                        // Before respawning, make sure any previous process is fully cleaned up
+                        try {
+                            await shard.kill({ force: true });
+                            console.log(`[Shard ${shard.id}] Successfully killed previous shard process`);
+                        } catch (killError) {
+                            // Ignore kill errors, process might already be gone
+                        }
+                        
+                        // Clear existing listeners to prevent memory leaks
+                        shard.removeAllListeners('ready');
+                        shard.removeAllListeners('disconnect');
+                        shard.removeAllListeners('death');
+                        
+                        // Then respawn with increased timeout
+                        await shard.respawn({ 
+                            delay: 1000,
+                            timeout: 300000 // 5 minutes timeout, same as initial spawn
+                        });
                         console.log(`[Shard ${shard.id}] Successfully resurrected`);
                     } catch (innerError) {
                         console.error(`[Shard ${shard.id}] Failed inner resurrection:`, innerError);
+                        
+                        // If we hit the ShardingReadyDied error, try one more time with a clean spawn
+                        if (innerError.code === 'ShardingReadyDied' && !status._cleanSpawnAttempted) {
+                            status._cleanSpawnAttempted = true;
+                            console.log(`[Shard ${shard.id}] Attempting a clean spawn after receiving ShardingReadyDied`);
+                            
+                            try {
+                                // Create a completely new shard with the same ID
+                                // This avoids potential issues with the old shard instance
+                                const newShard = this.createShard(shard.id);
+                                await newShard.spawn({ timeout: 300000 });
+                                console.log(`[Shard ${shard.id}] Clean spawn successful`);
+                            } catch (newSpawnError) {
+                                console.error(`[Shard ${shard.id}] Clean spawn failed:`, newSpawnError);
+                            }
+                        }
                     }
                 }, delay);
             } catch (error) {
@@ -316,26 +374,11 @@ async function calculateShardCount() {
             return parseInt(config.shardCount, 10);
         }
         
-        const { Client, GatewayIntentBits } = require('discord.js');
-        const tempClient = new Client({ intents: [GatewayIntentBits.Guilds] });
-        
-        console.log('Creating temporary client to calculate shard count...');
-        await tempClient.login(config.token);
-        
-        // Get recommended shard count from Discord
-        const recommendedShards = tempClient.options.shardCount;
-        const guildCount = (await tempClient.guilds.fetch()).size;
-        
-        await tempClient.destroy();
-        console.log(`Temporary client calculated ${guildCount} guilds with recommended ${recommendedShards} shards`);
-        
-        // If we have a small number of guilds, just use 1 shard
-        if (guildCount < 1000) {
-            return 1;
-        }
-        
-        // Otherwise use Discord's recommendation
-        return recommendedShards;
+        // For large bots, Discord now requires sharding automatically
+        // So let's default to a sensible number instead of creating a temporary client
+        console.log('Bot is likely large enough to require sharding. Using 2 shards by default.');
+        // You can adjust this number based on your bot's needs
+        return 2;
     } catch (error) {
         console.error('Failed to calculate shard count:', error);
         return 1; // Default to 1 shard if calculation fails
@@ -367,9 +410,12 @@ async function startSharding() {
             token: config.token,
             totalShards: shardCount,
             respawn: true,
-            timeout: 60000,
+            timeout: 300000, // Increased from 60000 to 300000 (5 minutes)
             execArgv: shardArgs
         });
+
+        // Add rate limit protection
+        setupRateLimitProtection(manager);
 
         // Start monitoring
         manager.startMonitoring();
@@ -378,7 +424,25 @@ async function startSharding() {
         console.log('Spawning shards...');
         await manager.spawn({
             delay: 7500, // 7.5 seconds delay between shard spawns
-            timeout: 60000 // 60 seconds timeout
+            timeout: 300000 // Increased from 60000 to 300000 (5 minutes)
+        }).catch(error => {
+            console.error('Error during shard spawn:', error);
+            
+            // Try to provide more helpful diagnostics
+            if (error.code === 'ShardingReadyTimeout') {
+                console.log('Shard ready timeout. This could be due to:');
+                console.log('1. Network connectivity issues');
+                console.log('2. Authentication problems with the Discord API');
+                console.log('3. High server load or rate limiting');
+                console.log('4. Errors in the client initialization code');
+                
+                // Check if token is properly configured
+                if (!config.token || config.token === 'YOUR_TOKEN_HERE') {
+                    console.error('ERROR: Invalid bot token configuration');
+                }
+            }
+            
+            throw error;
         });
         
         console.log('All shards spawned successfully');
@@ -425,8 +489,56 @@ function setupShutdownHandlers(manager) {
     // Handle uncaught exceptions
     process.on('uncaughtException', error => {
         console.error('Uncaught exception in shard manager:', error);
+        
+        // Fast check for I/O errors without complex operations
+        if (error.code === 'EIO' || error.message.includes('write EIO')) {
+            console.error('I/O Error detected, attempting recovery...');
+            // Don't exit - let the process continue
+            return;
+        }
+        
+        // For other errors, proceed with normal shutdown
         shutdown().catch(() => process.exit(1));
     });
+}
+
+// Add rate limiting protection for API calls - optimized version
+function setupRateLimitProtection(manager) {
+    // Lightweight rate limiting that only applies during high traffic periods
+    let apiCallCounter = 0;
+    let lastResetTime = Date.now();
+    const MAX_CALLS_PER_MINUTE = 100;
+    const RATE_LIMIT_RESET_INTERVAL = 60000; // 1 minute
+    
+    // More efficient rate limit check without an interval
+    const checkRateLimit = () => {
+        const now = Date.now();
+        // Reset counter if minute has passed
+        if (now - lastResetTime > RATE_LIMIT_RESET_INTERVAL) {
+            apiCallCounter = 0;
+            lastResetTime = now;
+            return false;
+        }
+        
+        return apiCallCounter > MAX_CALLS_PER_MINUTE;
+    };
+    
+    // Only patch spawn method, which is called infrequently
+    const origSpawn = manager.spawn;
+    manager.spawn = async function(...args) {
+        apiCallCounter += 3; // Less aggressive counting
+        
+        if (checkRateLimit()) {
+            console.warn('Rate limit prevention triggered - delaying shard spawn');
+            // Wait enough time for the rate limit to reset
+            const timeToWait = RATE_LIMIT_RESET_INTERVAL - (Date.now() - lastResetTime);
+            await new Promise(resolve => setTimeout(resolve, timeToWait + 1000));
+            apiCallCounter = 0;
+            lastResetTime = Date.now();
+        }
+        
+        return origSpawn.apply(this, args);
+    };
 }
 
 // Start the sharding process

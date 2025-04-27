@@ -1,7 +1,8 @@
+import fs from 'fs';
+
 class Markov {
 	constructor(input = []) {
 		this.chain = [];
-		this.fs = require('fs');
 		if (typeof input === 'object') {
 			input.forEach(item => this.add(item));
 		} else {
@@ -27,11 +28,11 @@ class Markov {
 	}
 
 	load(filename) {
-		this.chain = JSON.parse(this.fs.readFileSync(filename, 'utf8'));
+		this.chain = JSON.parse(fs.readFileSync(filename, 'utf8'));
 	}
 
 	loadTelegram(filename, username) {
-		const data = JSON.parse(this.fs.readFileSync(filename), 'utf8').messages
+		const data = JSON.parse(fs.readFileSync(filename), 'utf8').messages
 			.filter(message => typeof message.text === 'string')
 			.filter(message => (message.text.length > 5) && (message.text.indexOf('[object Object]') == -1))
 			.filter(message => message.forwarded_from === undefined)
@@ -47,18 +48,16 @@ class Markov {
 	}
 
 	save(filename) {
-		this.fs.writeFileSync(filename, JSON.stringify(this.chain));
+		fs.writeFileSync(filename, JSON.stringify(this.chain));
 	}
 
 	buildChain(currentToken, nextToken) {
-
 		let found = false;
 		for (let i = 0; i < this.chain.length; i++) {
 			const currentRow = this.chain[i];
 			const currentKey = currentRow.key;
 
 			if (currentKey === currentToken) {
-
 				found = true;
 				let increased = false;
 
@@ -72,7 +71,6 @@ class Markov {
 					}
 				}
 
-
 				if (!increased) {
 					this.chain[i].values.push({
 						next: nextToken,
@@ -80,7 +78,6 @@ class Markov {
 					});
 
 					this.chain[i].total++;
-
 				}
 			}
 		}
@@ -116,8 +113,6 @@ class Markov {
 	
 			return this.fixCapitals(result).toLowerCase();
 		} catch {/*pass*/}
-
-
 	}
 
 	generate_high(textLength = 70) {
@@ -140,7 +135,6 @@ class Markov {
 	
 			return this.fixCapitals(result);
 		} catch {/*pass*/}
-
 	}
 
 	fixCapitals(s) {
@@ -174,7 +168,6 @@ class Markov {
 		}
 
 		return currentRow.values[i].next;
-
 	}
 
 	getRandomInt(min, max) {
@@ -184,5 +177,4 @@ class Markov {
 	}
 }
 
-
-module.exports = Markov;
+export default Markov;

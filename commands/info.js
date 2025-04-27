@@ -1,15 +1,14 @@
-"use strict";
-
-const { SlashCommandBuilder } = require('discord.js');
-const { answers } = require('../assets/answers');
-const { languages } = require('../assets/descriptions');
-const { getChat } = require('../database');
-const { getLocale } = require('../functions');
+import {  SlashCommandBuilder  } from 'discord.js';
+import {  answers  } from '../assets/answers.js';
+import {  languages  } from '../assets/descriptions.js';
+import {  getChat  } from '../src/database/database.js';
+import {  getLocale  } from '../src/utils/functions.js';
 
 // Attempt to load prefix, handle if config.json is missing
 let prefix = '?'; // Default prefix if config is missing
 try {
-  prefix = require('../config.json').prefix || prefix;
+  const configModule = await import('../config.json', { with: { type: 'json' } });
+  prefix  = configModule.default.prefix || prefix;
 } catch (error) {
   if (error.code !== 'MODULE_NOT_FOUND') {
     console.error("Error loading prefix from config.json:", error);
@@ -17,15 +16,19 @@ try {
   console.warn("config.json not found or missing prefix, using default prefix '"+prefix+"'");
 }
 
-module.exports = {
+export default {
   data: new SlashCommandBuilder()
     .setName('info')
     .setDescription(languages.info.main['en-US'])
     .setDescriptionLocalizations(languages.info.main),
+  ephemeral: true,
   async execute(interaction) {
     if (!interaction.guildId) {
       try {
-        await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+        await interaction.reply({ 
+          content: "This command can only be used in a server.", 
+          flags: { ephemeral: true }
+        });
       } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
       return;
     }
@@ -34,7 +37,7 @@ module.exports = {
     let lang = 'en-US';
 
     try {
-      await interaction.deferReply({ ephemeral: true }); // Defer for safety
+      // The deferReply is now handled in bot.js
 
       try {
         chat = await getChat(interaction.guildId);

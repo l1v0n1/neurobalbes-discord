@@ -44,7 +44,7 @@ function getLocale(strings, command, string, language, ...vars) {
   return loc;
 }
 
-module.exports = {
+export {
   range,
   choice,
   contains,
