@@ -81,9 +81,10 @@ install_deps() {
     fi
     
     echo -e "${GREEN}Installing dependencies...${NC}"
-    # Rebuild SQLite3 from source
+    # Rebuild native modules from source *after* system deps are installed
     npm rebuild sqlite3 --build-from-source
-    # Then install other dependencies, including canvas which should now build correctly
+    npm rebuild canvas --build-from-source # Add rebuild step for canvas
+    # Then install other dependencies
     npm install --omit=optional
     
     # Ask if voice functionality is needed
