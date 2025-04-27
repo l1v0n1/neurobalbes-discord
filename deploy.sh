@@ -67,21 +67,23 @@ EOL
 
 # Function to install dependencies
 install_deps() {
-    # Install SQLite build dependencies
-    echo -e "${YELLOW}Installing build tools for SQLite3...${NC}"
+    # Install SQLite and Canvas build dependencies
+    echo -e "${YELLOW}Installing build tools for SQLite3 and Canvas...${NC}"
     if command -v apt-get &> /dev/null; then
         sudo apt-get update
-        sudo apt-get install -y build-essential python3 libsqlite3-dev
+        # Added canvas dependencies: libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+        sudo apt-get install -y build-essential python3 libsqlite3-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
     elif command -v yum &> /dev/null; then
-        sudo yum -y install gcc gcc-c++ make python3 sqlite-devel
+        # Added canvas dependencies for RHEL/CentOS/Fedora
+        sudo yum -y install gcc-c++ make python3 sqlite-devel cairo-devel pango-devel libjpeg-turbo-devel giflib-devel librsvg2-devel
     else
-        echo -e "${YELLOW}Could not detect package manager. Please manually install build-essential, python3, and sqlite3 development packages.${NC}"
+        echo -e "${YELLOW}Could not detect package manager. Please manually install build-essential, python3, sqlite3-dev, and canvas dependencies (Cairo, Pango, JPEG, GIF, RSVG).${NC}"
     fi
     
     echo -e "${GREEN}Installing dependencies...${NC}"
     # Rebuild SQLite3 from source
     npm rebuild sqlite3 --build-from-source
-    # Then install other dependencies
+    # Then install other dependencies, including canvas which should now build correctly
     npm install --omit=optional
     
     # Ask if voice functionality is needed
