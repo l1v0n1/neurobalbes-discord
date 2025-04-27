@@ -561,7 +561,7 @@ client.on(Events.InteractionCreate, async interaction => {
 			if (!interaction.replied && !interaction.deferred) {
 				await interaction.reply({ 
 					content: 'Sorry, that command is not available.', 
-					ephemeral: true
+					flags: { ephemeral: true }
 				});
 			}
 		} catch (error) {
@@ -574,7 +574,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		// Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
 		if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
 			await interaction.deferReply({
-				ephemeral: command.ephemeral ? true : undefined
+				flags: command.ephemeral ? { ephemeral: true } : undefined
 			});
 		}
 		
@@ -585,7 +585,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		try {
 			const errorReply = { 
 				content: 'An error occurred while executing this command.', 
-				ephemeral: true
+				flags: { ephemeral: true }
 			};
 			
 			if (interaction.replied) {
@@ -615,8 +615,20 @@ client.on(Events.GuildCreate, async guild => {
 		);
 		
 		if (channel) {
+			// Get the guild's language or default to English
+			const lang = await getLanguage(guild.id) || 'en';
+			
+			// Get localized welcome message if available
+			let welcomeMessage = `Hi **${guild.name}**!\nThanks for inviting me, I'm **Neurobalbes** and I remember your messages to generate my own.\n\nFor my commands, type \`/help\`\nTo change the bot language, type \`/language\``;
+			
+			// Try to use localized welcome message if it exists in answers
+			if (answers?.welcome?.message?.[lang]) {
+				welcomeMessage = answers.welcome.message[lang]
+					.replace('%GUILD_NAME%', guild.name);
+			}
+			
 			await channel.send({
-				content: `Hi **${guild.name}**!\nThanks for inviting me, I'm **Neurobalbes** and I remember your messages to generate my own.\n\nFor my commands, type \`/help\`\nTo change the bot language, type \`/language\``
+				content: welcomeMessage
 			}).catch(err => logger.warn(`${shardInfo} Could not send welcome message:`, err.message));
 		}
 	} catch (error) {

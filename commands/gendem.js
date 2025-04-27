@@ -29,7 +29,7 @@ export default {
     if (!interaction.guildId) {
         try {
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+                await interaction.reply({ content: "This command can only be used in a server.", flags: { ephemeral: true } });
             } else {
                 await interaction.editReply({ content: "This command can only be used in a server." });
             }
@@ -54,7 +54,7 @@ export default {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: getLocale(answers, 'common', 'flood_control', lang, timeLeft),
-                    ephemeral: true
+                    flags: { ephemeral: true }
                 });
             } else {
                 await interaction.editReply({
@@ -136,7 +136,7 @@ export default {
         try {
             // Attempt to inform user, checking if reply was already sent
             if (!interaction.replied && !interaction.deferred) {
-                 await interaction.reply({ content: getLocale(answers, 'common', 'general_error', lang), ephemeral: true });
+                 await interaction.reply({ content: getLocale(answers, 'common', 'general_error', lang), flags: { ephemeral: true } });
             } else {
                  await interaction.editReply({ content: getLocale(answers, 'common', 'general_error', lang) });
             }

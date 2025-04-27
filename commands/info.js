@@ -27,7 +27,7 @@ export default {
       try {
         await interaction.reply({ 
           content: "This command can only be used in a server.", 
-          ephemeral: true
+          flags: { ephemeral: true }
         });
       } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
       return;
@@ -76,7 +76,7 @@ export default {
       console.error(`Error executing info command for guild ${interaction.guildId}:`, error);
       // Avoid editing reply if initial defer failed
       if (!interaction.replied && !interaction.deferred) {
-        try { await interaction.reply({ content: 'An error occurred while retrieving info.', ephemeral: true }); } catch {}
+        try { await interaction.reply({ content: 'An error occurred while retrieving info.', flags: { ephemeral: true } }); } catch {}
       } else if (!interaction.ephemeral) { // Check if interaction is ephemeral before editing non-ephemerally
         try { await interaction.editReply({ content: 'An error occurred while retrieving info.' }); } catch {}
       }

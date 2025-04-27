@@ -34,7 +34,7 @@ export default {
             
             if (!commands.size) {
                 const noCommandsMessage = answers.help.no_commands[lang] || answers.help.no_commands.en;
-                return interaction.reply({ content: noCommandsMessage, ephemeral: true });
+                return interaction.reply({ content: noCommandsMessage, flags: { ephemeral: true } });
             }
             
             const helpEmbed = new EmbedBuilder()
@@ -76,7 +76,7 @@ export default {
             } else {
                 return interaction.reply({
                     embeds: [helpEmbed],
-                    ephemeral: true
+                    flags: { ephemeral: true }
                 });
             }
         } catch (error) {
@@ -89,7 +89,7 @@ export default {
             } else if (!interaction.replied) {
                 return interaction.reply({ 
                     content: 'An error occurred while retrieving help information. Please try again later.',
-                    ephemeral: true
+                    flags: { ephemeral: true }
                 });
             }
         }

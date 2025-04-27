@@ -36,8 +36,8 @@ export default {
 			// Update language in database
 			await updateLanguage(guildId, newLang);
 			
-			// Get the localized language name
-			const languageName = answers.language.translate[newLang] || answers.language.translate.en;
+			// Get the localized language name for the chosen language
+			const languageName = answers.language.translate[newLang] || newLang;
 			
 			// Send confirmation message in the selected language, replacing %VAR% with the language name
 			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;

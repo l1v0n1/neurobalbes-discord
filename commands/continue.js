@@ -19,7 +19,7 @@ export default {
         .setDMPermission(false),
 	async execute(interaction) {
         if (!interaction.guildId) {
-             try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
+             try { await interaction.reply({ content: "This command can only be used in a server.", flags: { ephemeral: true } }); } catch {}
              return;
         }
 
