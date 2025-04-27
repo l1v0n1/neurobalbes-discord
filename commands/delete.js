@@ -35,9 +35,15 @@ export default {
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setDMPermission(false),
+    // Set ephemeral flag for admin commands
+    ephemeral: true,
     async execute(interaction) {
         if (!interaction.guildId) {
-            try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
+            try { 
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+                }
+            } catch {}
             return;
         }
 
@@ -46,7 +52,7 @@ export default {
         let dbErrorOccurred = false;
 
         try {
-            await interaction.deferReply({ ephemeral: true });
+            // Remove manual deferReply - this is handled by bot.js
 
             try {
                 currentChat = await getChat(interaction.guildId);

@@ -13,8 +13,6 @@ export default {
                 .setRequired(true)),
     
     async execute(interaction) {
-        await interaction.deferReply();
-        
         try {
             const guildId = interaction.guild?.id;
             const lang = guildId ? await getLanguage(guildId) : 'en';

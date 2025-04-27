@@ -30,10 +30,10 @@ export default {
 		.setDescription('Shows information about bot shards (Admin only)')
 		.setDescriptionLocalizations(languages.shards.main)
 		.setDMPermission(false), // Shard info is not relevant in DMs
+	// Set ephemeral for admin commands
+	ephemeral: true,
 	async execute(interaction) {
 		try {
-			await interaction.deferReply({ ephemeral: true });
-
 			if (!adminId) {
 				console.error("Admin ID is not configured in config.json for shards command.");
 				await interaction.editReply({ content: "Command configuration error: Admin ID not set." });

@@ -561,7 +561,7 @@ client.on(Events.InteractionCreate, async interaction => {
 			if (!interaction.replied && !interaction.deferred) {
 				await interaction.reply({ 
 					content: 'Sorry, that command is not available.', 
-					flags: { ephemeral: true }
+					ephemeral: true
 				});
 			}
 		} catch (error) {
@@ -574,7 +574,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		// Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
 		if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
 			await interaction.deferReply({
-				flags: command.ephemeral ? 64 : undefined // 64 = ephemeral flag
+				ephemeral: command.ephemeral ? true : undefined
 			});
 		}
 		
@@ -585,7 +585,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		try {
 			const errorReply = { 
 				content: 'An error occurred while executing this command.', 
-				flags: { ephemeral: true }
+				ephemeral: true
 			};
 			
 			if (interaction.replied) {

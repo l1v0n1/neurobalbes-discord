@@ -5,7 +5,17 @@ import { answers } from '../assets/answers.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('Get information about available commands'),
+        .setDescription('Get information about available commands')
+        .addStringOption(option =>
+            option.setName('language')
+                .setDescription('Display help in a specific language')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'English', value: 'en' },
+                    { name: 'Русский', value: 'ru' },
+                    { name: 'Українська', value: 'uk' },
+                    { name: 'Türkçe', value: 'tr' }
+                )),
     
     // Explicitly set this to false to handle replies ourselves
     deferReply: false,
@@ -14,19 +24,49 @@ export default {
     async execute(interaction) {
         try {
             const guildId = interaction.guild?.id;
-            const lang = guildId ? await getLanguage(guildId) : 'en';
+            
+            // Get language from option or use guild default
+            const langOption = interaction.options.getString('language');
+            const lang = langOption || (guildId ? await getLanguage(guildId) : 'en');
+            
+            // Get all commands from the client
+            const commands = interaction.client.commands;
+            
+            if (!commands.size) {
+                const noCommandsMessage = answers.help.no_commands[lang] || answers.help.no_commands.en;
+                return interaction.reply({ content: noCommandsMessage, ephemeral: true });
+            }
             
             const helpEmbed = new EmbedBuilder()
                 .setColor('#5865F2')
                 .setTitle(answers.help.title[lang] || answers.help.title.en)
-                .setDescription(answers.help.description[lang] || answers.help.description.en)
-                .addFields(
-                    { name: '/chat', value: answers.help.chat[lang] || answers.help.chat.en },
-                    { name: '/voice', value: answers.help.voice[lang] || answers.help.voice.en },
-                    { name: '/language', value: answers.help.language[lang] || answers.help.language.en },
-                    { name: '/help', value: answers.help.help[lang] || answers.help.help.en }
-                )
-                .setFooter({ text: 'NeuroBalbes' });
+                .setDescription(answers.help.description[lang] || answers.help.description.en);
+            
+            // Group commands by category if specified, otherwise list alphabetically
+            const sortedCommands = Array.from(commands.values()).sort((a, b) => 
+                a.data.name.localeCompare(b.data.name)
+            );
+            
+            // Add each command to the embed
+            for (const command of sortedCommands) {
+                // Get localized description if available in answers.js
+                let description = command.data.description;
+                
+                // Check if we have a localized description in answers.js
+                if (answers.help[command.data.name] && answers.help[command.data.name][lang]) {
+                    description = answers.help[command.data.name][lang];
+                } else if (answers.help[command.data.name] && answers.help[command.data.name].en) {
+                    // Fallback to English
+                    description = answers.help[command.data.name].en;
+                }
+                
+                helpEmbed.addFields({ 
+                    name: `/${command.data.name}`, 
+                    value: description 
+                });
+            }
+            
+            helpEmbed.setFooter({ text: 'NeuroBalbes' });
             
             // Handle both deferred and direct responses
             if (interaction.deferred) {

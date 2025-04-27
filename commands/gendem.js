@@ -28,7 +28,11 @@ export default {
     // --- Initial Checks --- 
     if (!interaction.guildId) {
         try {
-            await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+            } else {
+                await interaction.editReply({ content: "This command can only be used in a server." });
+            }
         } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
         return;
     }
@@ -47,20 +51,18 @@ export default {
         } catch { /* Ignore DB error for cooldown message, use default lang */ }
 
         try {
-            await interaction.reply({
-                content: getLocale(answers, 'common', 'flood_control', lang, timeLeft),
-                ephemeral: true
-            });
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: getLocale(answers, 'common', 'flood_control', lang, timeLeft),
+                    ephemeral: true
+                });
+            } else {
+                await interaction.editReply({
+                    content: getLocale(answers, 'common', 'flood_control', lang, timeLeft)
+                });
+            }
         } catch (replyError) { console.error("Failed to send cooldown reply:", replyError); }
         return;
-    }
-
-    // --- Defer Reply --- 
-    try {
-        await interaction.deferReply(); // Use deferReply for potentially long operations
-    } catch (deferError) {
-        console.error("Failed to defer reply:", deferError);
-        return; // Can't proceed if defer fails
     }
 
     // --- Command Logic --- 

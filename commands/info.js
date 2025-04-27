@@ -27,7 +27,7 @@ export default {
       try {
         await interaction.reply({ 
           content: "This command can only be used in a server.", 
-          flags: { ephemeral: true }
+          ephemeral: true
         });
       } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
       return;
