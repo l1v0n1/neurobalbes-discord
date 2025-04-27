@@ -41,7 +41,7 @@ export default {
         if (!interaction.guildId) {
             try { 
                 if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: "This command can only be used in a server.", flags: { ephemeral: true } });
+                    await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
                 }
             } catch {}
             return;

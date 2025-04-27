@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { getLanguage } from '../src/database/methods.js';
 import { answers } from '../assets/answers.js';
+import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -27,20 +27,23 @@ export default {
             
             // Get language from option or use guild default
             const langOption = interaction.options.getString('language');
-            const lang = langOption || (guildId ? await getLanguage(guildId) : 'en');
+            const lang = langOption || await getServerLanguage(guildId);
             
             // Get all commands from the client
             const commands = interaction.client.commands;
             
             if (!commands.size) {
-                const noCommandsMessage = answers.help.no_commands[lang] || answers.help.no_commands.en;
-                return interaction.reply({ content: noCommandsMessage, flags: { ephemeral: true } });
+                const noCommandsMessage = await getLocalizedString(answers, 'help', 'no_commands', lang);
+                return interaction.reply({ content: noCommandsMessage, ephemeral: true });
             }
+            
+            const title = await getLocalizedString(answers, 'help', 'title', lang);
+            const description = await getLocalizedString(answers, 'help', 'description', lang);
             
             const helpEmbed = new EmbedBuilder()
                 .setColor('#5865F2')
-                .setTitle(answers.help.title[lang] || answers.help.title.en)
-                .setDescription(answers.help.description[lang] || answers.help.description.en);
+                .setTitle(title)
+                .setDescription(description);
             
             // Group commands by category if specified, otherwise list alphabetically
             const sortedCommands = Array.from(commands.values()).sort((a, b) => 
@@ -53,11 +56,9 @@ export default {
                 let description = command.data.description;
                 
                 // Check if we have a localized description in answers.js
-                if (answers.help[command.data.name] && answers.help[command.data.name][lang]) {
-                    description = answers.help[command.data.name][lang];
-                } else if (answers.help[command.data.name] && answers.help[command.data.name].en) {
-                    // Fallback to English
-                    description = answers.help[command.data.name].en;
+                const localizedDescription = await getLocalizedString(answers, 'help', command.data.name, lang);
+                if (localizedDescription) {
+                    description = localizedDescription;
                 }
                 
                 helpEmbed.addFields({ 
@@ -76,7 +77,7 @@ export default {
             } else {
                 return interaction.reply({
                     embeds: [helpEmbed],
-                    flags: { ephemeral: true }
+                    ephemeral: true
                 });
             }
         } catch (error) {
@@ -89,7 +90,7 @@ export default {
             } else if (!interaction.replied) {
                 return interaction.reply({ 
                     content: 'An error occurred while retrieving help information. Please try again later.',
-                    flags: { ephemeral: true }
+                    ephemeral: true
                 });
             }
         }

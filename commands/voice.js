@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getLanguage } from '../src/database/methods.js';
 import { answers } from '../assets/answers.js';
 import { processAudio } from '../src/tts/audioProcessor.js';
+import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -15,26 +15,30 @@ export default {
     async execute(interaction) {
         try {
             const guildId = interaction.guild?.id;
-            const lang = guildId ? await getLanguage(guildId) : 'en';
+            const lang = await getServerLanguage(guildId);
             const prompt = interaction.options.getString('prompt');
             
             if (!prompt) {
-                return interaction.editReply(answers.voice.no_prompt[lang] || answers.voice.no_prompt.en);
+                const response = await getLocalizedString(answers, 'voice', 'no_prompt', lang);
+                return interaction.editReply(response);
             }
             
             // Check if user is in a voice channel
             const voiceChannel = interaction.member?.voice.channel;
             if (!voiceChannel) {
-                return interaction.editReply(answers.voice.not_in_voice[lang] || answers.voice.not_in_voice.en);
+                const response = await getLocalizedString(answers, 'voice', 'not_in_voice', lang);
+                return interaction.editReply(response);
             }
             
             // Process the audio response
             const result = await processAudio(prompt, voiceChannel, interaction);
             
             if (result.success) {
-                return interaction.editReply(answers.voice.success[lang] || answers.voice.success.en);
+                const response = await getLocalizedString(answers, 'voice', 'success', lang);
+                return interaction.editReply(response);
             } else {
-                return interaction.editReply(result.error || (answers.voice.error[lang] || answers.voice.error.en));
+                const errorResponse = await getLocalizedString(answers, 'voice', 'error', lang);
+                return interaction.editReply(result.error || errorResponse);
             }
         } catch (error) {
             console.error('Error in voice command:', error);

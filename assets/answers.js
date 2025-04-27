@@ -279,28 +279,28 @@ const answers = {
             "tr": "Herhangi bir ses kanalında değilsiniz"
         },
         "not_in_voice": {
-            "ru": "Вы должны находиться в голосовом канале, чтобы использовать эту команду",
-            "en": "You must be in a voice channel to use this command",
-            "uk": "Ви повинні знаходитись у голосовому каналі, щоб використовувати цю команду",
-            "tr": "Bu komutu kullanmak için bir ses kanalında olmalısınız"
+            "ru": "Вы должны быть в голосовом канале, чтобы использовать эту команду.",
+            "en": "You must be in a voice channel to use this command.",
+            "uk": "Ви повинні бути в голосовому каналі, щоб використовувати цю команду.",
+            "tr": "Bu komutu kullanmak için bir ses kanalında olmalısınız."
         },
         "no_prompt": {
-            "ru": "Пожалуйста, укажите текст, который вы хотите услышать",
-            "en": "Please provide text that you would like to hear",
-            "uk": "Будь ласка, вкажіть текст, який ви хочете почути",
-            "tr": "Lütfen duymak istediğiniz metni girin"
+            "ru": "Пожалуйста, укажите текст для озвучивания.",
+            "en": "Please specify text for me to speak.",
+            "uk": "Будь ласка, вкажіть текст для озвучування.",
+            "tr": "Lütfen benim konuşmam için metin belirtin."
         },
         "success": {
-            "ru": "Воспроизвожу сообщение в голосовом канале",
-            "en": "Playing message in voice channel",
-            "uk": "Відтворюю повідомлення в голосовому каналі",
-            "tr": "Ses kanalında mesaj çalma"
+            "ru": "Голосовое сообщение отправлено!",
+            "en": "Voice message sent!",
+            "uk": "Голосове повідомлення надіслано!",
+            "tr": "Sesli mesaj gönderildi!"
         },
         "error": {
-            "ru": "Произошла ошибка при обработке голосового запроса",
-            "en": "An error occurred while processing your voice request",
-            "uk": "Сталася помилка під час обробки голосового запиту",
-            "tr": "Sesli isteğiniz işlenirken bir hata oluştu"
+            "ru": "Произошла ошибка при обработке голосового сообщения.",
+            "en": "An error occurred while processing the voice message.",
+            "uk": "Сталася помилка під час обробки голосового повідомлення.",
+            "tr": "Sesli mesaj işlenirken bir hata oluştu."
         },
         "start_voice": {
             "ru": "Начинаю общение в **%VAR%**",
@@ -319,6 +319,56 @@ const answers = {
             "en": "Disconnected from voice channel",
             "uk": "Відключився від голосового каналу",
             "tr": "Ses kanalından bağlantı kesildi"
+        }
+    },
+    "status": {
+        "title": {
+            "ru": "Статус бота для %VAR%",
+            "en": "Bot Status for %VAR%",
+            "uk": "Статус бота для %VAR%",
+            "tr": "%VAR% için Bot Durumu"
+        },
+        "language_label": {
+            "ru": "Текущий язык",
+            "en": "Current Language",
+            "uk": "Поточна мова",
+            "tr": "Geçerli Dil"
+        },
+        "talk_label": {
+            "ru": "Ответы бота",
+            "en": "Bot Responses",
+            "uk": "Відповіді бота",
+            "tr": "Bot Yanıtları"
+        },
+        "talk_enabled": {
+            "ru": "Включено",
+            "en": "Enabled",
+            "uk": "Увімкнено",
+            "tr": "Etkin"
+        },
+        "talk_disabled": {
+            "ru": "Отключено",
+            "en": "Disabled",
+            "uk": "Вимкнено",
+            "tr": "Devre dışı"
+        },
+        "speed_label": {
+            "ru": "Скорость ответа",
+            "en": "Response Speed",
+            "uk": "Швидкість відповіді",
+            "tr": "Yanıt Hızı"
+        },
+        "gen_label": {
+            "ru": "Режим генерации",
+            "en": "Generation Mode",
+            "uk": "Режим генерації",
+            "tr": "Oluşturma Modu"
+        },
+        "messages_label": {
+            "ru": "Сохраненные сообщения",
+            "en": "Stored Messages",
+            "uk": "Збережені повідомлення",
+            "tr": "Saklanan Mesajlar"
         }
     },
 };
