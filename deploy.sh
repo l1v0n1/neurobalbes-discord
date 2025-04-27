@@ -67,8 +67,21 @@ EOL
 
 # Function to install dependencies
 install_deps() {
+    # Install SQLite build dependencies
+    echo -e "${YELLOW}Installing build tools for SQLite3...${NC}"
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update
+        sudo apt-get install -y build-essential python3 libsqlite3-dev
+    elif command -v yum &> /dev/null; then
+        sudo yum -y install gcc gcc-c++ make python3 sqlite-devel
+    else
+        echo -e "${YELLOW}Could not detect package manager. Please manually install build-essential, python3, and sqlite3 development packages.${NC}"
+    fi
+    
     echo -e "${GREEN}Installing dependencies...${NC}"
-    # Explicitly use --omit=optional flag to avoid deprecation warnings
+    # Rebuild SQLite3 from source
+    npm rebuild sqlite3 --build-from-source
+    # Then install other dependencies
     npm install --omit=optional
     
     # Ask if voice functionality is needed
