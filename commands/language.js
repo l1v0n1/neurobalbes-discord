@@ -13,7 +13,8 @@ export default {
 				.addChoices(
 					{ name: 'English', value: 'en' },
 					{ name: 'Русский', value: 'ru' },
-					{ name: 'Українська', value: 'ua' }
+					{ name: 'Українська', value: 'uk' },
+					{ name: 'Türkçe', value: 'tr' }
 				)),
 	// Set as ephemeral by default
 	ephemeral: true,
@@ -35,8 +36,12 @@ export default {
 			// Update language in database
 			await updateLanguage(guildId, newLang);
 			
-			// Send confirmation message in the selected language
-			const responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
+			// Get the localized language name
+			const languageName = answers.language.translate[newLang] || answers.language.translate.en;
+			
+			// Send confirmation message in the selected language, replacing %VAR% with the language name
+			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
+			responseMessage = responseMessage.replace('%VAR%', languageName);
 			
 			// Let bot.js handle the deferred reply automatically - don't manually reply
 			await interaction.editReply({

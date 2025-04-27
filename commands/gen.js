@@ -51,12 +51,12 @@ export default {
         )
     ),
   // Set ephemeral to true to make responses only visible to the user
-  ephemeral: true,
+  ephemeral: false,
   async execute(interaction) {
     if (!interaction.guildId) {
       // Inform user it's guild-only
       try {
-        await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+        await interaction.reply({ content: "This command can only be used in a server.", flags: { ephemeral: true } });
       } catch (replyError) {
         console.error("Failed to send guild-only reply:", replyError);
       }
