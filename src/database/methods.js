@@ -1,5 +1,11 @@
 import { getChat, changeField } from './database.js';
 
+// Define supported languages
+const SUPPORTED_LANGUAGES = ['en', 'ru', 'uk', 'tr'];
+
+// Export supported languages for reuse
+export { SUPPORTED_LANGUAGES };
+
 /**
  * Get the language setting for a guild
  * @param {string} guildId - The Discord guild ID
@@ -9,7 +15,20 @@ export async function getLanguage(guildId) {
     try {
         console.log(`[DEBUG] getLanguage: Fetching language for guild ${guildId}`);
         const chat = await getChat(guildId);
-        const language = chat?.lang || 'en';
+        
+        // Check for null, undefined, empty string or 'null' value
+        let language = chat?.lang;
+        if (language === null || language === undefined || language === '' || language === 'null') {
+            console.log(`[DEBUG] getLanguage: Invalid language '${language}' detected, defaulting to 'en'`);
+            language = 'en';
+        }
+        
+        // Validate against supported languages
+        if (!SUPPORTED_LANGUAGES.includes(language)) {
+            console.log(`[DEBUG] getLanguage: Unsupported language '${language}' detected, defaulting to 'en'`);
+            language = 'en';
+        }
+        
         console.log(`[DEBUG] getLanguage: Retrieved language ${language} for guild ${guildId}`);
         console.log(`[DEBUG] getLanguage: Full chat object: ${JSON.stringify(chat)}`);
         return language;
@@ -28,6 +47,13 @@ export async function getLanguage(guildId) {
 export async function updateLanguage(guildId, language) {
     try {
         console.log(`[DEBUG] updateLanguage: Updating language to ${language} for guild ${guildId}`);
+        
+        // Handle null, undefined, empty string or invalid language values
+        if (language === null || language === undefined || language === '' || language === 'null' || !SUPPORTED_LANGUAGES.includes(language)) {
+            console.error(`[DEBUG] updateLanguage: Invalid language '${language}', defaulting to 'en'`);
+            language = 'en'; // Default to English for invalid inputs
+        }
+        
         const result = await changeField(guildId, 'lang', language);
         console.log(`[DEBUG] updateLanguage: Result from changeField: ${JSON.stringify(result)}`);
         

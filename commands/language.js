@@ -1,8 +1,16 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { answers } from '../assets/answers.js';
-import { getLanguage, updateLanguage } from '../src/database/methods.js';
+import { getLanguage, updateLanguage, SUPPORTED_LANGUAGES } from '../src/database/methods.js';
 import logger from '../src/utils/logger.js';
-import { getChat, changeField } from '../src/database/database.js';
+import { getChat } from '../src/database/database.js';
+
+// Define supported languages with their display names
+const LANGUAGE_NAMES = {
+	'en': 'English',
+	'ru': 'Русский',
+	'uk': 'Українська',
+	'tr': 'Türkçe'
+};
 
 export default {
 	data: new SlashCommandBuilder()
@@ -33,6 +41,18 @@ export default {
 			const guildId = interaction.guild.id;
 			const newLang = interaction.options.getString('lang');
             
+            // Validate language value
+            if (!newLang || !SUPPORTED_LANGUAGES.includes(newLang)) {
+                logger.error(`Invalid language selection`, {
+                    guildId,
+                    attemptedLang: newLang,
+                    supportedLanguages: SUPPORTED_LANGUAGES
+                });
+                return interaction.editReply({
+                    content: 'Invalid language selection. Please try again with a valid language option.'
+                });
+            }
+            
             // Log the request
             logger.info(`Language change requested`, {
                 guildId,
@@ -49,33 +69,34 @@ export default {
                 currentLang,
                 chatData: JSON.stringify(chatBefore)
             });
-			
+            
+            // Check if current language is null or invalid
+            if (currentLang === null || currentLang === 'null' || currentLang === undefined || currentLang === '') {
+                logger.warn(`Invalid current language detected`, {
+                    guildId,
+                    invalidLang: currentLang
+                });
+                // We'll still proceed with the change, but log the issue
+            }
+            
 			// If it's the same language, notify user (use proper language)
 			if (currentLang === newLang) {
 				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
-				const langName = getLanguageDisplayName(newLang);
+				const langName = LANGUAGE_NAMES[newLang];
 				return await interaction.editReply({
 					content: alreadyMessage.replace('%VAR%', langName)
 				});
 			}
 			
-			// Hard-coded language display names
-			const languageNames = {
-				'en': 'English',
-				'ru': 'Русский',
-				'uk': 'Українська',
-				'tr': 'Türkçe'
-			};
-			
 			// First, let's send a response to the user that we're working on it
 			await interaction.editReply({
-				content: `Changing language from ${getLanguageDisplayName(currentLang)} to ${getLanguageDisplayName(newLang)}...`
+				content: `Changing language from ${LANGUAGE_NAMES[currentLang] || currentLang} to ${LANGUAGE_NAMES[newLang]}...`
 			});
 			
 			try {
-                // DIRECT DATABASE UPDATE - Bypass all caching
-                const result = await changeField(guildId, 'lang', newLang);
-                logger.info(`Database update attempted`, {
+                // Use updateLanguage which has our enhanced validation instead of direct database call
+                const result = await updateLanguage(guildId, newLang);
+                logger.info(`Database update attempted via updateLanguage`, {
                     guildId,
                     newLang,
                     result: JSON.stringify(result)
@@ -107,8 +128,8 @@ export default {
                     });
                 }
                 
-                // Use the hardcoded language name
-                const languageName = languageNames[newLang] || newLang;
+                // Get language name from our constant
+                const languageName = LANGUAGE_NAMES[newLang];
                 
                 // Send confirmation message in the selected language
                 let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
@@ -147,14 +168,4 @@ export default {
 	}
 };
 
-// Helper function to get a display name for a language code
-function getLanguageDisplayName(langCode) {
-	const displayNames = {
-		'en': 'English',
-		'ru': 'Русский',
-		'uk': 'Українська',
-		'tr': 'Türkçe'
-	};
-	
-	return displayNames[langCode] || langCode;
-}
+// Helper function has been removed since we're using SUPPORTED_LANGUAGES constant

@@ -315,6 +315,21 @@ async function changeField(chatid, field, key) {
         throw new Error(`Invalid field specified: ${field}`);
     }
 
+    // Validate language field - prevent null values
+    if (field === 'lang') {
+        if (key === null || key === undefined || key === 'null' || key === '') {
+            console.error(`[DEBUG] changeField: Invalid language value detected: "${key}". Defaulting to 'en'`);
+            key = 'en';
+        }
+        
+        // Extra validation for supported languages
+        const supportedLangs = ['en', 'ru', 'uk', 'tr'];
+        if (!supportedLangs.includes(key)) {
+            console.error(`[DEBUG] changeField: Unsupported language value: "${key}". Defaulting to 'en'`);
+            key = 'en';
+        }
+    }
+
     console.log(`[DEBUG] changeField: Changing ${field} to ${key} for chat ${chatid}`);
     
     const result = await withConnection(async (db) => {
