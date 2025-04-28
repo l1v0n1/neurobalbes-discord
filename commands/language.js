@@ -40,41 +40,68 @@ export default {
 
 			const guildId = interaction.guild.id;
             
-            // === Log raw options data ===
-            logger.info('Raw interaction options data:', {
-                guildId,
-                optionsData: JSON.stringify(interaction.options.data)
-            });
-            // === Log full options object ===
-            logger.info('Full interaction.options object:', {
-                guildId,
-                optionsObject: JSON.stringify(interaction.options, null, 2) // Pretty print
-            });
-            // ============================
-            
-            // === Attempt to get value directly ===
-            let newLang = 'en'; // Default
+            // === Log the ENTIRE interaction object ===
             try {
-                const langOption = interaction.options.data.find(opt => opt.name === 'lang');
+                // Use JSON.stringify with a replacer to handle potential circular references
+                const getCircularReplacer = () => {
+                  const seen = new WeakSet();
+                  return (key, value) => {
+                    if (typeof value === "object" && value !== null) {
+                      if (seen.has(value)) {
+                        return "[Circular]"; // Replace circular reference
+                      }
+                      seen.add(value);
+                    }
+                    return value;
+                  };
+                };
+                logger.info('Full interaction object structure:', {
+                    guildId,
+                    interactionString: JSON.stringify(interaction, getCircularReplacer(), 2)
+                });
+            } catch(logError) {
+                 logger.error('Error stringifying full interaction object:', { guildId, logError });
+            }
+            // ========================================
+            
+            // === Attempt to get value directly from _hoistedOptions (WORKAROUND) ===
+            let newLang = 'en'; // Default
+            let foundDirectly = false;
+            try {
+                const langOption = interaction.options?._hoistedOptions?.find(opt => opt.name === 'lang');
                 if (langOption && typeof langOption.value === 'string') {
                     newLang = langOption.value;
+                    foundDirectly = true;
+                    logger.info('Successfully retrieved lang option via _hoistedOptions workaround', { guildId, value: newLang });
                 } else {
-                    logger.warn('Could not find string value for lang option directly.', { 
+                    logger.warn('Could not find string value for lang option via _hoistedOptions.', { 
                         guildId, 
-                        foundOption: JSON.stringify(langOption) 
+                        hoistedOptions: JSON.stringify(interaction.options?._hoistedOptions)
                     });
-                    // Fallback to trying getString, though likely to fail
-                    newLang = interaction.options.getString('lang');
                 }
             } catch (e) {
-                 logger.error('Error accessing options data directly:', { guildId, error: e });
-                 // Fallback to trying getString
-                 newLang = interaction.options.getString('lang');
+                 logger.error('Error accessing _hoistedOptions directly:', { guildId, error: e });
             }
-            // ======================================
+            // =====================================================================
+            
+            // Fallback to previous methods if workaround fails
+            if (!foundDirectly) {
+                logger.warn('Falling back to interaction.options.data/getString for lang option.', { guildId });
+                try {
+                    const langOptionData = interaction.options.data.find(opt => opt.name === 'lang');
+                    if (langOptionData && typeof langOptionData.value === 'string') {
+                        newLang = langOptionData.value;
+                    } else {
+                        newLang = interaction.options.getString('lang');
+                    }
+                } catch (fallbackError) {
+                    logger.error('Error during fallback option retrieval:', { guildId, fallbackError });
+                    newLang = interaction.options.getString('lang'); // Final attempt
+                }
+            }
             
             // === Add detailed logging here ===
-            logger.info('Retrieved language option', {
+            logger.info('Retrieved language option (Final Attempt)', {
                 guildId,
                 retrievedValue: newLang, 
                 valueType: typeof newLang,
@@ -82,9 +109,7 @@ export default {
             // ================================
             
             // Validate language value
-            // === Add type check ===
             if (typeof newLang !== 'string' || !SUPPORTED_LANGUAGES.includes(newLang)) {
-            // ======================
                 logger.error(`Invalid language selection`, {
                     guildId,
                     attemptedLang: typeof newLang === 'string' ? newLang : JSON.stringify(newLang), // Log safely
