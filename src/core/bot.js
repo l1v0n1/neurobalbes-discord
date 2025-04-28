@@ -1,9 +1,11 @@
-import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials } from 'discord.js';
+import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials, version as djsVersion } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
+
+logger.info(`Using discord.js version: ${djsVersion}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -527,6 +529,46 @@ client.once(Events.ClientReady, async c => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+	// === LOG INTERACTION EARLY ===
+	logger.info(`[InteractionCreate] Received interaction`, { 
+		interactionId: interaction.id,
+		type: interaction.type,
+		commandName: interaction.commandName, 
+		user: interaction.user.tag,
+		guildId: interaction.guildId
+	});
+
+	try {
+		// Try logging basic options structure early
+		logger.info('[InteractionCreate] Basic options structure:', { 
+			optionsKeys: interaction.options ? Object.keys(interaction.options) : 'null',
+			optionsData: interaction.options?.data ? JSON.stringify(interaction.options.data) : 'null'
+		});
+	} catch (logErr) {
+		logger.error('[InteractionCreate] Error logging basic options structure:', logErr);
+	}
+
+	try {
+		// Try stringifying the whole object early (with circular replacer)
+		const getCircularReplacer = () => {
+		  const seen = new WeakSet();
+		  return (key, value) => {
+			if (typeof value === "object" && value !== null) {
+			  if (seen.has(value)) return "[Circular]";
+			  seen.add(value);
+			}
+			return value;
+		  };
+		};
+		logger.info('[InteractionCreate] Stringifying full interaction object...', { interactionId: interaction.id });
+		const interactionString = JSON.stringify(interaction, getCircularReplacer(), 2);
+		// Log only a snippet if successful, to avoid massive logs unless necessary
+		logger.info('[InteractionCreate] Full interaction stringified (snippet):', { snippet: interactionString.substring(0, 500) + '...' }); 
+	} catch(stringifyError) {
+		 logger.error('[InteractionCreate] Error stringifying full interaction object:', stringifyError);
+	}
+	// ============================
+
 	if (!interaction.isChatInputCommand()) return;
 
 	const command = client.commands.get(interaction.commandName);
