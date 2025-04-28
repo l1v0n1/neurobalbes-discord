@@ -1,5 +1,8 @@
-import {  SlashCommandBuilder, EmbedBuilder, Status  } from 'discord.js';
+import {  SlashCommandBuilder, EmbedBuilder, Status, MessageFlags } from 'discord.js';
 import {  languages  } from '../assets/descriptions.js';
+import { answers } from '../assets/answers.js';
+import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
+import logger from '../src/utils/logger.js';
 
 // Attempt to load adminId, handle if config.json or key is missing
 let adminId = null;
@@ -30,8 +33,6 @@ export default {
 		.setDescription('Shows information about bot shards (Admin only)')
 		.setDescriptionLocalizations(languages.shards.main)
 		.setDMPermission(false), // Shard info is not relevant in DMs
-	// Set ephemeral for admin commands
-	ephemeral: true,
 	async execute(interaction) {
 		try {
 			if (!adminId) {
@@ -84,23 +85,10 @@ export default {
 			await interaction.editReply({ embeds: [embed] });
 
 		} catch (error) {
-			console.error("Error executing shards command:", error);
-			const errorMessage = "An error occurred while fetching shard information.";
-			// Check if reply is possible
-			if (interaction.deferred || interaction.replied) {
-				try {
-					await interaction.editReply({ content: errorMessage });
-				} catch (editError) {
-					console.error("Failed to send error reply for shards command:", editError);
-				}
-			} else {
-				// If defer failed, attempt a normal reply (unlikely to work)
-				try {
-					await interaction.reply({ content: errorMessage, ephemeral: true });
-				} catch (replyError) {
-					console.error("Failed to send initial error reply for shards command:", replyError);
-				}
-			}
+			logger.error('Error executing shards command:', { error });
+			const errorMessage = await getLocalizedString(answers, 'shards', 'error', lang);
+			// Use flags for ephemeral error reply
+			await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
 		}
 	}
 };

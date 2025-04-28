@@ -1,4 +1,4 @@
-import {  SlashCommandBuilder  } from 'discord.js';
+import {  SlashCommandBuilder, EmbedBuilder, MessageFlags  } from 'discord.js';
 import {  getChat  } from '../src/database/database.js';
 import Markov from '../src/utils/markov.js';
 import {  getLocaleWithoutString, getLocale, randomInteger  } from '../src/utils/functions.js';
@@ -49,21 +49,13 @@ export default {
           { name: languages.gen.verse['en-US'], value: 'poem', name_localizations: languages.gen.verse },
           { name: languages.gen.quote['en-US'], value: 'quote', name_localizations: languages.gen.quote }
         )
-    ),
-  // Set ephemeral to true to make responses only visible to the user
-  ephemeral: false,
+    )
+    .setDMPermission(false),
   async execute(interaction) {
-    if (!interaction.guildId) {
-      // Inform user it's guild-only
-      try {
-        await interaction.reply({ content: "This command can only be used in a server.", flags: { ephemeral: true } });
-      } catch (replyError) {
-        console.error("Failed to send guild-only reply:", replyError);
-      }
-      return;
+    if (!interaction.inGuild()) {
+      return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
     }
 
-    // Remove the manual reply - bot.js already handles deferring
     const type = interaction.options.getString('type'); // Use getString for clarity
     let chat;
     let lang = 'en-US'; // Default language
@@ -193,7 +185,7 @@ export default {
       console.error(`Failed to send final reply for guild ${interaction.guildId}:`, replyError);
       // Can't edit the reply again if it failed, maybe try followUp?
       try {
-        await interaction.followUp({ content: "Failed to send the generated text.", ephemeral: true });
+        await interaction.followUp({ content: "Failed to send the generated text.", flags: MessageFlags.Ephemeral });
       } catch (followUpError) {
         console.error("Failed to send follow-up error message:", followUpError);
       }

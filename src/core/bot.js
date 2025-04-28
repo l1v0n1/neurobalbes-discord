@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials, version as djsVersion, InteractionResponseFlags } from 'discord.js';
+import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials, version as djsVersion, MessageFlags } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
@@ -563,7 +563,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 await interaction.reply({ 
                     content: 'Sorry, that command is not available.', 
                     // Use flags for ephemeral error reply
-                    flags: InteractionResponseFlags.Ephemeral 
+                    flags: MessageFlags.Ephemeral 
                 });
             }
         } catch (error) {
@@ -585,7 +585,7 @@ client.on(Events.InteractionCreate, async interaction => {
         if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
             await interaction.deferReply({
                 // Use flags if command.ephemeral is true
-                flags: command.ephemeral ? InteractionResponseFlags.Ephemeral : undefined
+                flags: command.ephemeral ? MessageFlags.Ephemeral : undefined
             });
         }
         
@@ -615,7 +615,7 @@ client.on(Events.InteractionCreate, async interaction => {
             const errorReply = { 
                 content: 'An error occurred while executing this command.', 
                 // Use flags for ephemeral error reply
-                flags: InteractionResponseFlags.Ephemeral 
+                flags: MessageFlags.Ephemeral 
             };
             
             // Simplified reply/followUp logic

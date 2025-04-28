@@ -1,4 +1,4 @@
-import {  SlashCommandBuilder  } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import {  answers  } from '../assets/answers.js';
 import {  languages  } from '../assets/descriptions.js';
 import {  getChat  } from '../src/database/database.js';
@@ -20,25 +20,19 @@ try {
 export default {
   data: new SlashCommandBuilder()
     .setName('info')
-    .setDescription(languages.info.main['en-US'])
-    .setDescriptionLocalizations(languages.info.main),
-  ephemeral: true,
+    .setDescription('Get information about the bot.'),
   async execute(interaction) {
-    if (!interaction.guildId) {
-      try {
-        await interaction.reply({ 
-          content: "This command can only be used in a server.", 
-          ephemeral: true
-        });
-      } catch (replyError) { logger.error("Failed to send guild-only reply", { error: replyError }); }
-      return;
-    }
-
-    let chat;
-    let lang = 'en-US';
-
+    let lang = 'en'; // Default language
     try {
-      // The deferReply is now handled in bot.js
+      // Language fetching logic (assuming getServerLanguage exists)
+      if (interaction.inGuild()) {
+        lang = await getServerLanguage(interaction.guildId);
+      }
+
+      // Defer reply (ephemeral handled by central handler)
+      // await interaction.deferReply({ ephemeral: true }); 
+
+      let chat;
 
       try {
         // Force-fetch chat with fresh data to avoid caching issues
@@ -96,7 +90,7 @@ export default {
       
       // Avoid editing reply if initial defer failed
       if (!interaction.replied && !interaction.deferred) {
-        try { await interaction.reply({ content: 'An error occurred while retrieving info.', ephemeral: true }); } catch {}
+        try { await interaction.reply({ content: 'An error occurred while retrieving info.', flags: MessageFlags.Ephemeral }); } catch {}
       } else if (!interaction.ephemeral) { // Check if interaction is ephemeral before editing non-ephemerally
         try { await interaction.editReply({ content: 'An error occurred while retrieving info.' }); } catch {}
       }

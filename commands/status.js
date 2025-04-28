@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getChat } from '../src/database/database.js';
 import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
@@ -7,34 +7,24 @@ import logger from '../src/utils/logger.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('status')
-        .setDescription('Show the current settings for the bot'),
-        
-    // Make visible to everyone
-    ephemeral: true,
-    
+        .setDescription('Shows the bot`s current status and settings for this server.')
+        .setDMPermission(false),
+
     async execute(interaction) {
+        if (!interaction.inGuild()) {
+            return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
+        }
+
+        const lang = await getServerLanguage(interaction.guildId);
+
         try {
-            if (!interaction.guildId) {
-                return interaction.reply({ 
-                    content: 'This command can only be used in a server.',
-                    ephemeral: true 
-                });
-            }
-            
-            const guildId = interaction.guildId;
-            let lang = 'en'; // Default language
-            try {
-                 lang = await getServerLanguage(guildId);
-            } catch (langError) {
-                logger.error(`[status] Error fetching language for guild ${guildId}:`, { error: langError?.message || langError });
-                // Proceed with default 'en'
-            }
-            
-            // Get current settings
-            const chat = await getChat(guildId);
+            // Defer reply (ephemeral handled by central handler)
+            // await interaction.deferReply({ ephemeral: true }); 
+
+            const chat = await getChat(interaction.guildId);
             if (!chat) {
-                 logger.error(`[status] Failed to get chat data for guild ${guildId}.`);
-                 return interaction.reply({ content: 'Could not retrieve server settings.', ephemeral: true });
+                logger.warn(`No settings found for guild ${interaction.guildId} in status command.`);
+                return interaction.reply({ content: 'Could not retrieve server settings.', flags: MessageFlags.Ephemeral });
             }
             
             // Get localized strings
@@ -82,41 +72,22 @@ export default {
                 .setFooter({ text: 'NeuroBalbes' })
                 .setTimestamp();
             
-            // Check if interaction is still valid before replying
-            if (interaction.replied || interaction.deferred) {
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
-            } else {
-                 return interaction.reply({ embeds: [embed], ephemeral: true });
-            }
-            
+            // Decide whether to edit or reply based on deferral state (should be handled by central handler)
+            await interaction.editReply({ embeds: [embed] });
+
         } catch (error) {
-            // Log the error originating from THIS command
-            logger.error(`[status] Error executing command for guild ${interaction.guildId}:`, {
-                 errorMessage: error?.message,
-                 errorStack: error?.stack,
-                 guildId: interaction.guildId,
-                 userId: interaction.user?.id
-            });
-            console.error('[status command CATCH] Raw caught error:', error); // Log raw error too
-            
-            // Attempt to reply with a generic error message
+            logger.error('Error executing status command:', { error, guildId: interaction.guildId });
+            const errorMessage = await getLocalizedString(answers, 'common', 'general_error', lang);
+            // Use flags for ephemeral error reply
             try {
-                const errorReply = { 
-                    content: 'An error occurred while retrieving status information.',
-                    ephemeral: true 
-                };
-                if (interaction.replied || interaction.deferred) {
-                     await interaction.followUp(errorReply).catch(e => {}); // Suppress followUp errors
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
                 } else {
-                    await interaction.reply(errorReply).catch(e => {}); // Suppress reply errors
+                    await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
                 }
             } catch (replyError) {
-                 // Ignore errors during error reporting
+                logger.error('Failed to send error reply for status command:', { replyError });
             }
-            // IMPORTANT: Re-throw the error if you want the central handler in bot.js to also log it
-            // throw error; 
-            // OR just return here if local logging is sufficient
-            return; 
         }
-    }
+    },
 }; 

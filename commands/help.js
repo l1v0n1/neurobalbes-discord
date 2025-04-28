@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
 import logger from '../src/utils/logger.js';
@@ -18,14 +18,14 @@ export default {
                     { name: 'Türkçe', value: 'tr' }
                 )),
     
-    // Explicitly set this to false to handle replies ourselves
-    deferReply: false,
-    ephemeral: true,
-    
+    // These are handled by the central interaction handler now
+    // deferReply: false, 
+    // ephemeral: true, 
+
     async execute(interaction) {
         try {
-            // Defer reply immediately
-            await interaction.deferReply({ ephemeral: true });
+            // Defer reply immediately using flags
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             
             const guildId = interaction.guild?.id;
             
@@ -89,9 +89,10 @@ export default {
                     content: 'An error occurred while retrieving help information. Please try again later.'
                 });
             } else if (!interaction.replied) {
+                // Use flags for ephemeral error reply
                 return interaction.reply({ 
                     content: 'An error occurred while retrieving help information. Please try again later.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         }

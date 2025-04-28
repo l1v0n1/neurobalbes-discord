@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionsBitField } from 'discord.js';
+import { SlashCommandBuilder, PermissionsBitField, MessageFlags } from 'discord.js';
 import { remove, getChat } from '../src/database/database.js';
 import { languages } from '../assets/descriptions.js';
 import { answers } from '../assets/answers.js';
@@ -35,13 +35,11 @@ export default {
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setDMPermission(false),
-    // Set ephemeral flag for admin commands
-    ephemeral: true,
     async execute(interaction) {
         if (!interaction.guildId) {
             try { 
                 if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+                    await interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
                 }
             } catch {}
             return;
@@ -112,6 +110,10 @@ export default {
                     console.error("Failed to send final error reply for delete command:", editError);
                 }
             }
+            await interaction.followUp({ 
+                content: 'An error occurred while trying to delete messages.',
+                flags: MessageFlags.Ephemeral
+            });
         }
     }
 };

@@ -1,8 +1,9 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getLanguage, updateLanguage, SUPPORTED_LANGUAGES } from '../src/database/methods.js';
 import logger from '../src/utils/logger.js';
 import { getChat } from '../src/database/database.js';
+import { PermissionsBitField } from 'discord.js';
 
 // Define supported languages with their display names
 const LANGUAGE_NAMES = {
@@ -15,19 +16,19 @@ const LANGUAGE_NAMES = {
 export default {
 	data: new SlashCommandBuilder()
 		.setName('language')
-		.setDescription('Change the bot language')
+		.setDescription('Changes the bot language for this server.')
 		.addStringOption(option =>
-			option.setName('type')
-				.setDescription('Select a language')
+			option.setName('language')
+				.setDescription('The language to set')
 				.setRequired(true)
 				.addChoices(
 					{ name: 'English', value: 'en' },
 					{ name: 'Русский', value: 'ru' },
 					{ name: 'Українська', value: 'uk' },
 					{ name: 'Türkçe', value: 'tr' }
-				)),
-	// Set as ephemeral by default
-	ephemeral: true,
+				))
+		.setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+		.setDMPermission(false),
 	async execute(interaction) {
 		try {
 			// Don't defer here - bot.js already handles deferring
@@ -42,11 +43,11 @@ export default {
             
             let newLang = 'en'; // Default value
             try {
-                 newLang = interaction.options.getString('type'); 
+                 newLang = interaction.options.getString('language'); 
                  // Basic validation happens below
             } catch (e) {
                 // Log only if fetching the option fails unexpectedly
-                logger.error('[language.js] Failed to get string option \'type\':', { guildId: guildId, error: e?.message || e });
+                logger.error('[language.js] Failed to get string option \'language\':', { guildId: guildId, error: e?.message || e });
                 newLang = 'en'; // Default on error
             }
 
@@ -139,19 +140,17 @@ export default {
                 });
             }
 		} catch (error) {
-			logger.error('Error in language command', {
-				error: error?.message || error,
-				guildId: interaction.guild?.id,
-				userId: interaction.user.id
-			});
-			
-			const errorMessage = answers.common?.database_error?.en || 'An error occurred. Please try again later.';
-			
-			// Make sure we handle this even if the interaction hasn't been deferred
-			if (interaction.deferred) {
-				await interaction.editReply({ content: errorMessage });
-			} else {
-				await interaction.reply({ content: errorMessage, ephemeral: true });
+			logger.error('Error executing language command:', { error, guildId: interaction.guildId });
+			const errorMessage = await getLocalizedString(answers, 'common', 'general_error', lang);
+			// Use flags for ephemeral error reply
+			try {
+				if (interaction.deferred || interaction.replied) {
+					await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
+				} else {
+					await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
+				}
+			} catch (replyError) {
+				logger.error('Failed to send error reply for language command:', { replyError });
 			}
 		}
 	}
