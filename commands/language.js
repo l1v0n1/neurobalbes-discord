@@ -41,6 +41,15 @@ export default {
 			const guildId = interaction.guild.id;
 			const newLang = interaction.options.getString('lang');
             
+            // === Add detailed logging here ===
+            logger.info('Retrieved language option', {
+                guildId,
+                rawOptionValue: newLang, 
+                optionType: typeof newLang,
+                fullOptions: JSON.stringify(interaction.options) // Log all options for context
+            });
+            // ================================
+            
             // Validate language value
             if (!newLang || !SUPPORTED_LANGUAGES.includes(newLang)) {
                 logger.error(`Invalid language selection`, {
