@@ -39,10 +39,10 @@ console.log(`Main bot script path: ${botPath}`);
 const manager = new ShardingManager(botPath, {
     token: token, // Pass the token
     totalShards: config.totalShards, // Use 'auto' or the value from config
+    respawn: true, // Automatically respawn shards that die
+    execArgv: ['--max-old-space-size=4096'] // Attempt to pass memory limit
     // Add other ShardingManager options here if needed, e.g.:
-    // respawn: true, 
-    // shardArgs: ['--some-node-flag'], // Basic node flags can sometimes work
-    // execArgv: ['--inspect'] // For debugging specific shards
+    // shardArgs: ['--some-node-flag'],
 });
 
 console.log(`Attempting to spawn shards with totalShards set to: ${config.totalShards}`);
@@ -72,7 +72,7 @@ manager.on('shardCreate', (shard) => {
 });
 
 // Spawn your shards
-manager.spawn()
+manager.spawn({ delay: 15000, timeout: 90000 }) // Add delay (15s) and longer timeout (90s)
     .then(() => {
         console.log('[ShardManager] All shards spawned successfully.');
     })
