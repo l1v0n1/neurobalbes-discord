@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import logger from '../utils/logger.js';
 
 // Connection pool implementation
 class ConnectionPool {
