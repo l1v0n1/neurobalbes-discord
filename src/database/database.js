@@ -315,16 +315,63 @@ async function changeField(chatid, field, key) {
         throw new Error(`Invalid field specified: ${field}`);
     }
 
-    await withConnection(async (db) => {
+    console.log(`[DEBUG] changeField: Changing ${field} to ${key} for chat ${chatid}`);
+    
+    const result = await withConnection(async (db) => {
         const tableName = `peer${chatid}`;
+        
+        console.log(`[DEBUG] changeField: Checking if table ${tableName} exists`);
+        const tableExists = await db.get(
+            `SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?`,
+            [tableName]
+        );
+        
+        if (!tableExists) {
+            console.log(`[DEBUG] changeField: Table ${tableName} doesn't exist, creating it first`);
+            await createTable(chatid);
+        }
+        
+        console.log(`[DEBUG] changeField: Running UPDATE query on table ${tableName}`);
+        console.log(`[DEBUG] changeField: Query: UPDATE ${tableName} SET ${field} = ${key} WHERE peer_id = ${chatid}`);
+        
         // Use validated field name safely in the query
-        await db.run(
+        const updateResult = await db.run(
             `UPDATE ${tableName} SET ${field} = ? WHERE peer_id = ?`,
             [key, chatid] // Parameterized
         );
+        
+        console.log(`[DEBUG] changeField: Update result: ${JSON.stringify(updateResult)}`);
+        console.log(`[DEBUG] changeField: Rows changed: ${updateResult.changes}`);
+        
+        if (updateResult.changes === 0) {
+            console.log(`[DEBUG] changeField: No rows updated, checking if row exists`);
+            const rowExists = await db.get(`SELECT 1 FROM ${tableName} WHERE peer_id = ?`, [chatid]);
+            
+            if (!rowExists) {
+                console.log(`[DEBUG] changeField: No row with peer_id ${chatid}, inserting new row`);
+                await db.run(`
+                    INSERT INTO ${tableName}
+                    (peer_id, ${field})
+                    VALUES (?, ?)
+                `, [chatid, key]);
+            } else {
+                console.log(`[DEBUG] changeField: Row exists but no changes made. This might be a bug.`);
+            }
+        }
+        
+        // Verify the change was made
+        console.log(`[DEBUG] changeField: Verifying the change was made`);
+        const verification = await db.get(`SELECT ${field} FROM ${tableName} WHERE peer_id = ?`, [chatid]);
+        console.log(`[DEBUG] changeField: Verification result: ${JSON.stringify(verification)}`);
+        
         // Invalidate cache for the updated chat
-        cache.data.delete(`chat_${chatid}`); 
+        console.log(`[DEBUG] changeField: Invalidating cache for chat ${chatid}`);
+        cache.data.delete(`chat_${chatid}`);
+        
+        return verification;
     });
+    
+    return result;
 }
 
 async function clearText(chatid) {

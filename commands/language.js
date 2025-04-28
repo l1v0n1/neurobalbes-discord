@@ -32,20 +32,34 @@ export default {
 
 			const guildId = interaction.guild.id;
 			const newLang = interaction.options.getString('lang');
-			
+            
+            // Log the request
+            logger.info(`Language change requested`, {
+                guildId,
+                requestedLang: newLang,
+                user: interaction.user.id
+            });
+            
 			// Get current language for response
-			const currentLang = await getLanguage(guildId);
+            const chatBefore = await getChat(guildId);
+			const currentLang = chatBefore?.lang || 'en';
+            
+            logger.info(`Current language before change`, {
+                guildId,
+                currentLang,
+                chatData: JSON.stringify(chatBefore)
+            });
 			
 			// If it's the same language, notify user (use proper language)
 			if (currentLang === newLang) {
 				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
-				const langName = answers.language.translate[newLang] || getLanguageDisplayName(newLang);
+				const langName = getLanguageDisplayName(newLang);
 				return await interaction.editReply({
 					content: alreadyMessage.replace('%VAR%', langName)
 				});
 			}
 			
-			// The language display names are hardcoded here to ensure they're always available
+			// Hard-coded language display names
 			const languageNames = {
 				'en': 'English',
 				'ru': 'Русский',
@@ -53,41 +67,67 @@ export default {
 				'tr': 'Türkçe'
 			};
 			
-			// Update language in database directly using changeField for reliability
-			await changeField(guildId, 'lang', newLang);
-			
-			// Force clear the database cache to ensure changes are immediately reflected
-			// Validate changes were saved correctly
-			const updatedChat = await getChat(guildId);
-			if (updatedChat.lang !== newLang) {
-				logger.error(`Language update failed: database shows ${updatedChat.lang} instead of ${newLang}`, {
-					guildId,
-					requestedLang: newLang,
-					actualLang: updatedChat.lang
-				});
-				return interaction.editReply({
-					content: 'Failed to update language. Please try again later.'
-				});
-			}
-			
-			// Use the hard-coded language name to ensure it's never null/undefined
-			const languageName = languageNames[newLang];
-			
-			// Log the language change
-			logger.info(`Language changed for guild ${guildId}`, {
-				oldLanguage: currentLang,
-				newLanguage: newLang,
-				languageName
-			});
-			
-			// Send confirmation message in the selected language, replacing %VAR% with the language name
-			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
-			responseMessage = responseMessage.replace('%VAR%', languageName);
-			
-			// Edit the deferred reply
+			// First, let's send a response to the user that we're working on it
 			await interaction.editReply({
-				content: responseMessage
+				content: `Changing language from ${getLanguageDisplayName(currentLang)} to ${getLanguageDisplayName(newLang)}...`
 			});
+			
+			try {
+                // DIRECT DATABASE UPDATE - Bypass all caching
+                const result = await changeField(guildId, 'lang', newLang);
+                logger.info(`Database update attempted`, {
+                    guildId,
+                    newLang,
+                    result: JSON.stringify(result)
+                });
+                
+                // Wait a second to ensure database writes are committed
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Verify the change directly from database
+                const chatAfter = await getChat(guildId);
+                const updatedLang = chatAfter?.lang;
+                
+                logger.info(`Language after update attempt`, {
+                    guildId,
+                    requestedLang: newLang,
+                    actualLang: updatedLang,
+                    fullChat: JSON.stringify(chatAfter)
+                });
+                
+                if (updatedLang !== newLang) {
+                    logger.error(`Language update failed, values don't match`, {
+                        guildId,
+                        requestedLang: newLang,
+                        actualLang: updatedLang
+                    });
+                    
+                    return interaction.editReply({
+                        content: `Failed to update language. Requested: ${newLang}, actual: ${updatedLang || 'none'}`
+                    });
+                }
+                
+                // Use the hardcoded language name
+                const languageName = languageNames[newLang] || newLang;
+                
+                // Send confirmation message in the selected language
+                let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
+                responseMessage = responseMessage.replace('%VAR%', languageName);
+                
+                await interaction.editReply({
+                    content: responseMessage + `\n(Debug: lang=${updatedLang})`
+                });
+            } catch (dbError) {
+                logger.error(`Database error during language update`, {
+                    error: dbError,
+                    guildId,
+                    requestedLang: newLang
+                });
+                
+                return interaction.editReply({
+                    content: `Database error: ${dbError.message}`
+                });
+            }
 		} catch (error) {
 			logger.error('Error in language command', {
 				error,

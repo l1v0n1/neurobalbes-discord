@@ -7,8 +7,12 @@ import { getChat, changeField } from './database.js';
  */
 export async function getLanguage(guildId) {
     try {
+        console.log(`[DEBUG] getLanguage: Fetching language for guild ${guildId}`);
         const chat = await getChat(guildId);
-        return chat?.lang || 'en';
+        const language = chat?.lang || 'en';
+        console.log(`[DEBUG] getLanguage: Retrieved language ${language} for guild ${guildId}`);
+        console.log(`[DEBUG] getLanguage: Full chat object: ${JSON.stringify(chat)}`);
+        return language;
     } catch (error) {
         console.error(`Error getting language for guild ${guildId}:`, error);
         return 'en'; // Default to English on error
@@ -23,7 +27,19 @@ export async function getLanguage(guildId) {
  */
 export async function updateLanguage(guildId, language) {
     try {
-        await changeField(guildId, 'lang', language);
+        console.log(`[DEBUG] updateLanguage: Updating language to ${language} for guild ${guildId}`);
+        const result = await changeField(guildId, 'lang', language);
+        console.log(`[DEBUG] updateLanguage: Result from changeField: ${JSON.stringify(result)}`);
+        
+        // Verify the change
+        const verifiedLang = await getLanguage(guildId);
+        console.log(`[DEBUG] updateLanguage: Verified language after update: ${verifiedLang}`);
+        
+        if (verifiedLang !== language) {
+            console.error(`[DEBUG] updateLanguage: Language verification failed! Expected ${language}, got ${verifiedLang}`);
+        }
+        
+        return result;
     } catch (error) {
         console.error(`Error updating language for guild ${guildId}:`, error);
         throw error;
