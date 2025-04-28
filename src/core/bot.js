@@ -549,10 +549,13 @@ client.on(Events.InteractionCreate, async interaction => {
 	}
 
 	try {
-		// Try stringifying the whole object early (with circular replacer)
-		const getCircularReplacer = () => {
+		// Try stringifying the whole object early (with BigInt support)
+		const getCircularReplacerWithBigInt = () => {
 		  const seen = new WeakSet();
 		  return (key, value) => {
+			if (typeof value === 'bigint') {
+			  return value.toString() + 'n'; // Convert BigInt to string representation
+			}
 			if (typeof value === "object" && value !== null) {
 			  if (seen.has(value)) return "[Circular]";
 			  seen.add(value);
@@ -560,12 +563,12 @@ client.on(Events.InteractionCreate, async interaction => {
 			return value;
 		  };
 		};
-		logger.info('[InteractionCreate] Stringifying full interaction object...', { interactionId: interaction.id });
-		const interactionString = JSON.stringify(interaction, getCircularReplacer(), 2);
-		// Log only a snippet if successful, to avoid massive logs unless necessary
-		logger.info('[InteractionCreate] Full interaction stringified (snippet):', { snippet: interactionString.substring(0, 500) + '...' }); 
+		logger.info('[InteractionCreate] Stringifying full interaction object (with BigInt support)...', { interactionId: interaction.id });
+		const interactionString = JSON.stringify(interaction, getCircularReplacerWithBigInt(), 2);
+		// Log only a snippet if successful
+		logger.info('[InteractionCreate] Full interaction stringified (snippet):', { snippet: interactionString.substring(0, 1000) + '...' }); // Log more snippet
 	} catch(stringifyError) {
-		 logger.error('[InteractionCreate] Error stringifying full interaction object:', stringifyError);
+		 logger.error('[InteractionCreate] Error stringifying full interaction object (with BigInt support):', stringifyError);
 	}
 	// ============================
 
