@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getChat } from '../src/database/database.js';
 import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
+import logger from '../src/utils/logger.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -21,10 +22,20 @@ export default {
             }
             
             const guildId = interaction.guildId;
-            const lang = await getServerLanguage(guildId);
+            let lang = 'en'; // Default language
+            try {
+                 lang = await getServerLanguage(guildId);
+            } catch (langError) {
+                logger.error(`[status] Error fetching language for guild ${guildId}:`, { error: langError?.message || langError });
+                // Proceed with default 'en'
+            }
             
             // Get current settings
             const chat = await getChat(guildId);
+            if (!chat) {
+                 logger.error(`[status] Failed to get chat data for guild ${guildId}.`);
+                 return interaction.reply({ content: 'Could not retrieve server settings.', ephemeral: true });
+            }
             
             // Get localized strings
             const title = await getLocalizedString(answers, 'status', 'title', lang, interaction.guild.name) 
@@ -33,8 +44,9 @@ export default {
             const languageLabel = await getLocalizedString(answers, 'status', 'language_label', lang) 
                 || 'Current Language';
                 
-            const languageName = await getLocalizedString(answers, 'language', 'translate', lang) 
-                || answers.language.translate[lang] || lang;
+            const languageName = /* LANGUAGE_NAMES?.[chat.lang || 'en'] || */ 
+                                 (await getLocalizedString(answers, 'language', chat.lang || 'en', lang)) || 
+                                 chat.lang || 'en'; // Fallback chain
                 
             const talkLabel = await getLocalizedString(answers, 'status', 'talk_label', lang) 
                 || 'Bot Responses';
@@ -61,26 +73,50 @@ export default {
                 .setColor('#5865F2')
                 .setTitle(title)
                 .addFields(
-                    { name: languageLabel, value: languageName, inline: true },
-                    { name: talkLabel, value: talkStatus, inline: true },
-                    { name: speedLabel, value: chat.speed.toString(), inline: true },
-                    { name: genLabel, value: genMode, inline: true },
-                    { name: messagesLabel, value: chat.textbase.length.toString(), inline: true }
+                    { name: languageLabel, value: String(languageName), inline: true },
+                    { name: talkLabel, value: String(talkStatus), inline: true },
+                    { name: speedLabel, value: String(chat.speed ?? 'N/A'), inline: true },
+                    { name: genLabel, value: String(genMode), inline: true },
+                    { name: messagesLabel, value: String(chat.textbase?.length ?? '0'), inline: true }
                 )
                 .setFooter({ text: 'NeuroBalbes' })
                 .setTimestamp();
             
-            return interaction.reply({
-                embeds: [embed],
-                ephemeral: true
-            });
+            // Check if interaction is still valid before replying
+            if (interaction.replied || interaction.deferred) {
+                return interaction.editReply({ embeds: [embed], ephemeral: true });
+            } else {
+                 return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
             
         } catch (error) {
-            console.error('Error in status command:', error);
-            return interaction.reply({ 
-                content: 'An error occurred while retrieving status information.',
-                ephemeral: true 
+            // Log the error originating from THIS command
+            logger.error(`[status] Error executing command for guild ${interaction.guildId}:`, {
+                 errorMessage: error?.message,
+                 errorStack: error?.stack,
+                 guildId: interaction.guildId,
+                 userId: interaction.user?.id
             });
+            console.error('[status command CATCH] Raw caught error:', error); // Log raw error too
+            
+            // Attempt to reply with a generic error message
+            try {
+                const errorReply = { 
+                    content: 'An error occurred while retrieving status information.',
+                    ephemeral: true 
+                };
+                if (interaction.replied || interaction.deferred) {
+                     await interaction.followUp(errorReply).catch(e => {}); // Suppress followUp errors
+                } else {
+                    await interaction.reply(errorReply).catch(e => {}); // Suppress reply errors
+                }
+            } catch (replyError) {
+                 // Ignore errors during error reporting
+            }
+            // IMPORTANT: Re-throw the error if you want the central handler in bot.js to also log it
+            // throw error; 
+            // OR just return here if local logging is sufficient
+            return; 
         }
     }
 }; 

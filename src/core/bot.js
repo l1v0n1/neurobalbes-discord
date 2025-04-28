@@ -585,7 +585,7 @@ client.on(Events.InteractionCreate, async interaction => {
             'completed'
         );
     } catch (error) {
-        // Log the error with message and stack
+        // Log the error with message and stack using the logger
         logger.error(`Error executing command ${interaction.commandName}`, {
             commandName: interaction.commandName,
             guildId: interaction.guildId,
@@ -593,6 +593,8 @@ client.on(Events.InteractionCreate, async interaction => {
             errorMessage: error?.message, // Log the error message
             errorStack: error?.stack // Log the full stack trace
         });
+        // Also log the raw error object directly to console for inspection
+        console.error(`[InteractionCreate CATCH] Raw caught error for command ${interaction.commandName}:`, error);
         
         try {
             // Attempt to reply or follow up with an error message
