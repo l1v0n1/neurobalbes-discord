@@ -281,51 +281,52 @@ client.commands = new Collection();
 
 // Improved command loading with async/await
 async function loadCommands() {
-	const commandsPath = path.join(__dirname, '..', '..', 'commands');
-	
+	client.commands = new Collection();
+	const commandsPath = path.join(__dirname, '../../commands');
+	logger.info(`Searching for command files in: ${commandsPath}`);
+
 	try {
 		const commandFiles = await fs.readdir(commandsPath);
-		const jsFiles = commandFiles.filter(file => file.endsWith('.js'));
-		
-		logger.info(`Found ${jsFiles.length} command files`);
-		
-		for (const file of jsFiles) {
+		logger.info(`Found ${commandFiles.length} potential command files: ${commandFiles.join(', ')}`);
+
+		for (const file of commandFiles) {
+			if (!file.endsWith('.js')) continue;
+			const filePath = path.join(commandsPath, file);
+			const commandName = file.split('.')[0];
+			logger.info(`Loading command file: ${filePath}`);
+
 			try {
-				const filePath = path.join(commandsPath, file);
-				logger.info(`Loading command file: ${filePath}`);
-				
-				try {
-					const command = await import(filePath);
-					
-					// Debug what's in the command module
-					logger.info(`Command module properties: ${Object.keys(command).join(', ')}`);
-					logger.info(`Command default export keys: ${command.default ? Object.keys(command.default).join(', ') : 'No default export'}`);
-					
-					// Check if command is in the default export
-					if (command.default && 'data' in command.default && 'execute' in command.default) {
-						client.commands.set(command.default.data.name, command.default);
-						logger.info(`Loaded command: ${command.default.data.name}`);
-					} else if ('data' in command && 'execute' in command) {
-						client.commands.set(command.data.name, command);
-						logger.info(`Loaded command: ${command.data.name}`);
-					} else {
-						logger.warn(`[WARNING] The command at ${filePath} is missing required "data" or "execute" property.`);
-					}
-				} catch (importError) {
-					logger.error(`Import error for ${filePath}: ${importError.message}`);
-					if (importError.stack) {
-						logger.error(`Stack trace: ${importError.stack}`);
-					}
+				// Convert file path to URL for dynamic import
+				const fileUrl = new URL(`file://${filePath}`);
+				const commandModule = await import(fileUrl.href);
+
+				// Check structure of the imported module
+				if (!commandModule.default || typeof commandModule.default !== 'object') {
+					logger.warn(`Skipping command file ${file}: Does not have a default export object.`);
+					continue;
+				}
+				const command = commandModule.default;
+				logger.info(`Command module properties: ${Object.keys(commandModule).join(', ')}`);
+				logger.info(`Command default export keys: ${Object.keys(command).join(', ')}`);
+
+				// Check for essential properties
+				if ('data' in command && 'execute' in command) {
+					client.commands.set(command.data.name, command);
+					logger.info(`Loaded command: ${command.data.name}`);
+				} else {
+					logger.warn(`Skipping command file ${file}: Missing required "data" or "execute" property in default export.`);
 				}
 			} catch (error) {
-				logger.error(`Error loading command file: ${file}`, error);
+				logger.error(`Error loading individual command file ${file}:`, error);
+				// Decide if we should continue loading other commands or stop
+				// For now, just log the error and continue
 			}
 		}
-		
 		logger.info(`Successfully loaded ${client.commands.size} commands`);
 	} catch (error) {
-		logger.error(`Error loading commands directory:`, error);
-		process.exit(1);
+		logger.error(`[CRITICAL] Failed to read commands directory or process command files:`, error);
+		// This is likely fatal for startup
+		throw error; // Re-throw to be caught by the main() catch block
 	}
 }
 
@@ -701,47 +702,61 @@ async function main() {
 		// Set up process-wide exception handling for promises
 		process.on('unhandledRejection', (error) => {
 			logger.error(`Unhandled promise rejection:`, error);
-			// Don't crash for promise rejections, they're usually non-fatal
+			// Consider if crashing is appropriate for some rejection types
 		});
-		
+
+		// Add top-level exception handler for synchronous errors during startup
+		process.on('uncaughtException', (error, origin) => {
+			logger.error(`[CRITICAL] Uncaught exception during startup or runtime:`, error);
+			logger.error(`Origin: ${origin}`);
+			// Decide if process should exit based on error type or origin
+			// For now, log critically and let existing logic handle exit if needed
+		});
+
+		logger.info('Starting main initialization...');
+
 		// Load commands first
+		logger.info('Loading commands...');
 		await loadCommands();
-		
+		logger.info('Command loading complete.');
+
 		// Validate token before attempting login
 		if (!config.token || config.token === 'YOUR_TOKEN_HERE') {
 			logger.error(`Invalid bot token configuration. Check your config.json or environment variables.`);
-			process.exit(1);
+			process.exit(1); // Exit immediately for invalid token
 		}
-		
+
 		// Then login with better error handling
 		logger.info(`Attempting to log in to Discord...`);
-		await client.login(config.token).catch(error => {
-			logger.error(`Login error: ${error.message}`);
-			
-			if (error.code === 'TOKEN_INVALID') {
-				logger.error(`The provided token is invalid. Check your configuration.`);
-			} else if (error.code === 'DISALLOWED_INTENTS') {
-				logger.error(`The bot is trying to use intents that aren't enabled in the Discord Developer Portal.`);
-			}
-			
-			throw error;
-		});
-		
-		logger.info(`Successfully logged in and connected to Discord!`);
-		
+		await client.login(config.token);
+		logger.info(`Successfully logged in! Waiting for client to be ready...`);
+
 		// Set a timeout to exit if the ready event never fires
 		const readyTimeout = setTimeout(() => {
-			logger.error(`Client did not become ready within timeout period. Exiting.`);
+			logger.error(`Client did not become ready within timeout period (4 minutes). Exiting.`);
 			process.exit(1);
 		}, 240000); // 4 minutes
-		
+
 		// Clear the timeout when ready event fires
 		client.once(Events.ClientReady, () => {
 			clearTimeout(readyTimeout);
+			logger.info('Client is ready!');
+			// Put any post-ready initialization here if needed
 		});
+
+		logger.info('Main initialization sequence complete, event handlers are active.');
+
 	} catch (error) {
-		logger.error(`Failed to initialize bot:`, error);
-		process.exit(1);
+		logger.error(`[CRITICAL] Failed to initialize bot in main function:`, error);
+		// Attempt to send error to shard manager before exiting
+		if (client.shard) {
+			try {
+				client.shard.send({ type: 'INITIALIZATION_FAILED', error: error.message });
+			} catch (sendError) {
+				logger.error('Failed to send initialization failure to shard manager', sendError);
+			}
+		}
+		process.exit(1); // Exit on any initialization error in main
 	}
 }
 
