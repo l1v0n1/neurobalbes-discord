@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 let config = {
     token: process.env.BOT_TOKEN,
     shardCount: 'auto',
-    shardArgs: ['--max-old-space-size=2048']
+    shardArgs: ['--max-old-space-size=4096']
 };
 
 try {
@@ -28,10 +28,14 @@ function calculateMemoryLimit() {
     console.log(`System memory: ${totalMemory}GB total, ${freeMemory}GB free`);
     
     // Allocate memory based on available system resources
-    // Leave at least 1GB for the system
-    const perShardMemory = Math.max(1, Math.min(2, Math.floor((freeMemory - 1) / 2)));
-    
-    return `--max-old-space-size=${perShardMemory * 1024}`;
+    // Default to 4GB per shard if calculation fails or not enough free memory
+    const baseMemory = 4096;
+    // Try to leave at least 2GB for the system if possible
+    const calculatedMemory = freeMemory > 4 ? Math.floor(((freeMemory - 2) / (config.shardCount === 'auto' ? 2 : parseInt(config.shardCount, 10))) * 1024) : baseMemory;
+    // Use at least 2GB, but max 4GB unless specifically configured higher
+    const perShardMemoryMB = Math.max(2048, Math.min(baseMemory, calculatedMemory)); 
+
+    return `--max-old-space-size=${perShardMemoryMB}`;
 }
 
 class CustomShardingManager extends ShardingManager {
