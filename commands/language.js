@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getLanguage, updateLanguage } from '../src/database/methods.js';
 import logger from '../src/utils/logger.js';
+import { getChat, changeField } from '../src/database/database.js';
 
 export default {
 	data: new SlashCommandBuilder()
@@ -38,17 +39,39 @@ export default {
 			// If it's the same language, notify user (use proper language)
 			if (currentLang === newLang) {
 				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
-				const langName = answers.language.translate[newLang] || newLang;
+				const langName = answers.language.translate[newLang] || getLanguageDisplayName(newLang);
 				return await interaction.editReply({
 					content: alreadyMessage.replace('%VAR%', langName)
 				});
 			}
 			
-			// Update language in database
-			await updateLanguage(guildId, newLang);
+			// The language display names are hardcoded here to ensure they're always available
+			const languageNames = {
+				'en': 'English',
+				'ru': 'Русский',
+				'uk': 'Українська',
+				'tr': 'Türkçe'
+			};
 			
-			// Get the localized language name for the chosen language with fallback
-			const languageName = answers.language.translate[newLang] || getLanguageDisplayName(newLang);
+			// Update language in database directly using changeField for reliability
+			await changeField(guildId, 'lang', newLang);
+			
+			// Force clear the database cache to ensure changes are immediately reflected
+			// Validate changes were saved correctly
+			const updatedChat = await getChat(guildId);
+			if (updatedChat.lang !== newLang) {
+				logger.error(`Language update failed: database shows ${updatedChat.lang} instead of ${newLang}`, {
+					guildId,
+					requestedLang: newLang,
+					actualLang: updatedChat.lang
+				});
+				return interaction.editReply({
+					content: 'Failed to update language. Please try again later.'
+				});
+			}
+			
+			// Use the hard-coded language name to ensure it's never null/undefined
+			const languageName = languageNames[newLang];
 			
 			// Log the language change
 			logger.info(`Language changed for guild ${guildId}`, {

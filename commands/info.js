@@ -3,6 +3,7 @@ import {  answers  } from '../assets/answers.js';
 import {  languages  } from '../assets/descriptions.js';
 import {  getChat  } from '../src/database/database.js';
 import {  getLocale  } from '../src/utils/functions.js';
+import logger from '../src/utils/logger.js';
 
 // Attempt to load prefix, handle if config.json is missing
 let prefix = '?'; // Default prefix if config is missing
@@ -29,7 +30,7 @@ export default {
           content: "This command can only be used in a server.", 
           ephemeral: true
         });
-      } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
+      } catch (replyError) { logger.error("Failed to send guild-only reply", { error: replyError }); }
       return;
     }
 
@@ -40,11 +41,22 @@ export default {
       // The deferReply is now handled in bot.js
 
       try {
+        // Force-fetch chat with fresh data to avoid caching issues
         chat = await getChat(interaction.guildId);
+        
+        // Log the language we're using to help with debugging
+        logger.info(`Using language for info command`, {
+          guildId: interaction.guildId, 
+          language: chat?.lang || 'en'
+        });
+        
         lang = chat?.lang === 'en' ? 'en-US' : (chat?.lang || 'en-US');
       } catch (dbError) {
-        console.error(`Database error fetching chat for info command in guild ${interaction.guildId}:`, dbError);
-        await interaction.editReply({ content: getLocale(answers, 'common', 'database_error', lang) || "Database error occurred." });
+        logger.error(`Database error fetching chat for info command`, {
+          guildId: interaction.guildId,
+          error: dbError
+        });
+        await interaction.editReply({ content: getLocale(answers, 'common', 'database_error', 'en') || "Database error occurred." });
         return;
       }
 
@@ -57,6 +69,10 @@ export default {
       // Build description parts, using getLocale with fallbacks
       const serverIDText = getLocale(answers, 'info', 'serverID', lang, interaction.guildId) || `Server ID: ${interaction.guildId}`;
       const savedCountText = getLocale(answers, 'info', 'saved_count', lang, textbaseLength) || `Saved Messages: ${textbaseLength}`;
+      
+      // Also show current language in the info output
+      const langName = getLanguageDisplayName(chat?.lang || 'en');
+      const languageText = `Language: ${langName}`;
 
       let statusText;
       if (talk === 0) { // Bot is silent
@@ -68,12 +84,16 @@ export default {
         statusText = `${modeValueText}\n${speedValueText}`;
       }
 
-      const message = `${serverIDText}\n${savedCountText}\n\n${statusText}`.trim();
+      const message = `${serverIDText}\n${languageText}\n${savedCountText}\n\n${statusText}`.trim();
 
       await interaction.editReply(message);
 
     } catch (error) {
-      console.error(`Error executing info command for guild ${interaction.guildId}:`, error);
+      logger.error(`Error executing info command`, {
+        guildId: interaction.guildId,
+        error
+      });
+      
       // Avoid editing reply if initial defer failed
       if (!interaction.replied && !interaction.deferred) {
         try { await interaction.reply({ content: 'An error occurred while retrieving info.', ephemeral: true }); } catch {}
@@ -83,3 +103,15 @@ export default {
     }
   }
 };
+
+// Helper function to get a display name for a language code
+function getLanguageDisplayName(langCode) {
+	const displayNames = {
+		'en': 'English',
+		'ru': 'Русский',
+		'uk': 'Українська',
+		'tr': 'Türkçe'
+	};
+	
+	return displayNames[langCode] || langCode;
+}
