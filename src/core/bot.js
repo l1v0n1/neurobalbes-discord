@@ -534,47 +534,34 @@ client.on(Events.InteractionCreate, async interaction => {
 		interactionId: interaction.id,
 		type: interaction.type,
 		commandName: interaction.commandName, 
-		user: interaction.user.tag,
+		user: interaction.user?.tag || 'Unknown User', // Safer access
 		guildId: interaction.guildId
 	});
 
+	// === Manual Inspection ===
 	try {
-		// Try logging basic options structure early
-		logger.info('[InteractionCreate] Basic options structure:', { 
-			optionsKeys: interaction.options ? Object.keys(interaction.options) : 'null',
-			optionsData: interaction.options?.data ? JSON.stringify(interaction.options.data) : 'null'
-		});
-	} catch (logErr) {
-		logger.error('[InteractionCreate] Error logging basic options structure:', logErr);
+		logger.info('[InteractionCreate] Inspecting interaction object properties:');
+		logger.info(`  - interaction keys: ${Object.keys(interaction).join(', ')}`);
+		logger.info(`  - interaction.options type: ${typeof interaction.options}`);
+		if (interaction.options) {
+			logger.info(`  - interaction.options keys: ${Object.keys(interaction.options).join(', ')}`);
+			// Log raw data/options directly without stringify if possible
+			console.log('  - interaction.options.data:', interaction.options.data); 
+			console.log('  - interaction.options._hoistedOptions:', interaction.options._hoistedOptions);
+		}
+	} catch (inspectError) {
+		logger.error('[InteractionCreate] Error during manual inspection:', inspectError);
+	}
+	// ===========================
+
+	if (!interaction.isChatInputCommand()) {
+		logger.debug('[InteractionCreate] Interaction is not ChatInputCommand, skipping.');
+		return; 
 	}
 
-	try {
-		// Try stringifying the whole object early (with BigInt support)
-		const getCircularReplacerWithBigInt = () => {
-		  const seen = new WeakSet();
-		  return (key, value) => {
-			if (typeof value === 'bigint') {
-			  return value.toString() + 'n'; // Convert BigInt to string representation
-			}
-			if (typeof value === "object" && value !== null) {
-			  if (seen.has(value)) return "[Circular]";
-			  seen.add(value);
-			}
-			return value;
-		  };
-		};
-		logger.info('[InteractionCreate] Stringifying full interaction object (with BigInt support)...', { interactionId: interaction.id });
-		const interactionString = JSON.stringify(interaction, getCircularReplacerWithBigInt(), 2);
-		// Log only a snippet if successful
-		logger.info('[InteractionCreate] Full interaction stringified (snippet):', { snippet: interactionString.substring(0, 1000) + '...' }); // Log more snippet
-	} catch(stringifyError) {
-		 logger.error('[InteractionCreate] Error stringifying full interaction object (with BigInt support):', stringifyError);
-	}
-	// ============================
-
-	if (!interaction.isChatInputCommand()) return;
-
+	logger.debug(`[InteractionCreate] Processing ChatInputCommand: ${interaction.commandName}`);
 	const command = client.commands.get(interaction.commandName);
+	
 	if (!command) {
 		logger.error(`No command matching ${interaction.commandName} was found.`, {
 			commandName: interaction.commandName,
