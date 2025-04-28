@@ -1,4 +1,4 @@
-import {  SlashCommandBuilder, PermissionsBitField, MessageFlags  } from 'discord.js';
+import {  SlashCommandBuilder, PermissionsBitField  } from 'discord.js';
 import {  answers  } from '../assets/answers.js';
 import {  languages  } from '../assets/descriptions.js';
 import {  changeField, getChat, clearText  } from '../src/database/database.js';
@@ -20,7 +20,7 @@ const MAX_SPEED = 10;
 export default {
     data: new SlashCommandBuilder()
         .setName('setting')
-        .setDescription('Configures bot settings for this server (Admin only).')
+        .setDescription(languages.setting.main['en-US'])
         .setDescriptionLocalizations(languages.setting.main)
         .addSubcommand(subcommand =>
             subcommand
@@ -80,9 +80,15 @@ export default {
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setDMPermission(false),
+    ephemeral: true,
     async execute(interaction) {
-        if (!interaction.inGuild()) {
-            return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
+         if (!interaction.guildId) {
+             try { 
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+                }
+             } catch {}
+             return;
         }
 
         let currentChat;
@@ -100,13 +106,13 @@ export default {
 
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                  const denyMessage = getLocale(answers, 'common', 'access_denied', currentLang) || "You do not have permission to use this command.";
-                 await interaction.reply({ content: denyMessage, flags: MessageFlags.Ephemeral });
+                 await interaction.editReply({ content: denyMessage });
                  return;
             }
 
             if (dbErrorOccurred) {
                 const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred fetching current settings.";
-                await interaction.reply({ content: dbErrorMessage, flags: MessageFlags.Ephemeral });
+                await interaction.editReply({ content: dbErrorMessage });
                 return;
             }
 
@@ -180,16 +186,16 @@ export default {
                 }
 
                 if (errorMessage) {
-                    await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
+                    await interaction.editReply({ content: errorMessage });
                     return;
                 }
 
                 if (subcommand === 'wipe') {
                      if (successMessage) {
-                         await interaction.reply({ content: successMessage });
+                         await interaction.editReply({ content: successMessage });
                          return;
                      } else {
-                         await interaction.reply({ content: errorMessage || "An error occurred during wipe.", flags: MessageFlags.Ephemeral });
+                         await interaction.editReply({ content: errorMessage || "An error occurred during wipe." });
                          return;
                      }
                 }
@@ -197,29 +203,26 @@ export default {
                 if (dbField !== null && dbValue !== null) {
                      await changeField(interaction.guildId, dbField, dbValue);
                      const finalMessage = successMessage || "Setting updated successfully.";
-                     await interaction.reply({ content: finalMessage });
+                     await interaction.editReply({ content: finalMessage });
                 } else if (subcommand !== 'wipe') {
                      console.error(`Setting command reached end without action for ${subcommand} in guild ${interaction.guildId}`);
-                     await interaction.reply({ content: "An internal error occurred processing the setting.", flags: MessageFlags.Ephemeral });
+                     await interaction.editReply({ content: "An internal error occurred processing the setting." });
                 }
 
             } catch (dbChangeError) {
                  console.error(`DB error applying setting change (${subcommand}) for guild ${interaction.guildId}:`, dbChangeError);
                  const dbErrorMessage = getLocale(answers, 'common', 'database_error', currentLang) || "A database error occurred while changing the setting.";
-                 await interaction.reply({ content: dbErrorMessage, flags: MessageFlags.Ephemeral });
+                 await interaction.editReply({ content: dbErrorMessage });
             }
         } catch (error) {
             console.error(`Error executing setting command for guild ${interaction.guildId}:`, error);
-            const errorMessage = await getLocale(answers, 'common', 'general_error', currentLang);
-            try {
-                if (interaction.deferred || interaction.replied) {
-                    await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
-                } else {
-                    await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
-                }
-            } catch (replyError) {
-                console.error('Failed to send error reply for setting command:', { replyError });
-            }
+             if (interaction.deferred || interaction.replied) {
+                 try {
+                     await interaction.editReply({ content: "An unexpected error occurred." });
+                 } catch (editError) {
+                     console.error("Failed to send final error reply for setting command:", editError);
+                 }
+             }
         }
     }
 };

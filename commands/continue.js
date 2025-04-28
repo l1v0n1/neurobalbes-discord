@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getChat } from '../src/database/database.js';
 import { contains, choice, getLocale } from '../src/utils/functions.js';
 import { languages } from '../assets/descriptions.js';
@@ -19,7 +19,7 @@ export default {
         .setDMPermission(false),
 	async execute(interaction) {
         if (!interaction.guildId) {
-             try { await interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral }); } catch {}
+             try { await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true }); } catch {}
              return;
         }
 

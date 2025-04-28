@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials, version as djsVersion, MessageFlags } from 'discord.js';
+import { Client, Events, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, ActivityType, Partials, version as djsVersion } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
@@ -562,8 +562,7 @@ client.on(Events.InteractionCreate, async interaction => {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ 
                     content: 'Sorry, that command is not available.', 
-                    // Use flags for ephemeral error reply
-                    flags: MessageFlags.Ephemeral 
+                    ephemeral: true
                 });
             }
         } catch (error) {
@@ -584,8 +583,7 @@ client.on(Events.InteractionCreate, async interaction => {
         // Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
         if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
             await interaction.deferReply({
-                // Use flags if command.ephemeral is true
-                flags: command.ephemeral ? MessageFlags.Ephemeral : undefined
+                ephemeral: command.ephemeral ? true : undefined
             });
         }
         
@@ -614,8 +612,7 @@ client.on(Events.InteractionCreate, async interaction => {
             // Attempt to reply or follow up with an error message
             const errorReply = { 
                 content: 'An error occurred while executing this command.', 
-                // Use flags for ephemeral error reply
-                flags: MessageFlags.Ephemeral 
+                ephemeral: true
             };
             
             // Simplified reply/followUp logic

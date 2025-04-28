@@ -1,4 +1,4 @@
-import {  SlashCommandBuilder, AttachmentBuilder, MessageFlags  } from 'discord.js';
+import {  SlashCommandBuilder, AttachmentBuilder  } from 'discord.js';
 import {  demotivatorImage  } from '../src/utils/demotivator.js';
 import {  getChat  } from '../src/database/database.js';
 import Markov  from '../src/utils/markov.js';
@@ -23,12 +23,18 @@ export default {
       .setRequired(true)
       .setName('image')
       .setDescription(languages.gendem.image['en-US'])
-      .setDescriptionLocalizations(languages.gendem.image))
-    .setDMPermission(false),
+      .setDescriptionLocalizations(languages.gendem.image)),
   async execute(interaction) {
     // --- Initial Checks --- 
-    if (!interaction.inGuild()) {
-        return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
+    if (!interaction.guildId) {
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+            } else {
+                await interaction.editReply({ content: "This command can only be used in a server." });
+            }
+        } catch (replyError) { console.error("Failed to send guild-only reply:", replyError); }
+        return;
     }
 
     const userId = interaction.user.id;
@@ -48,7 +54,7 @@ export default {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: getLocale(answers, 'common', 'flood_control', lang, timeLeft),
-                    flags: MessageFlags.Ephemeral
+                    ephemeral: true
                 });
             } else {
                 await interaction.editReply({
@@ -130,9 +136,9 @@ export default {
         try {
             // Attempt to inform user, checking if reply was already sent
             if (!interaction.replied && !interaction.deferred) {
-                 await interaction.reply({ content: getLocale(answers, 'common', 'general_error', lang), flags: MessageFlags.Ephemeral });
+                 await interaction.reply({ content: getLocale(answers, 'common', 'general_error', lang), ephemeral: true });
             } else {
-                 await interaction.followUp({ content: getLocale(answers, 'common', 'general_error', lang), flags: MessageFlags.Ephemeral });
+                 await interaction.editReply({ content: getLocale(answers, 'common', 'general_error', lang) });
             }
         } catch (replyError) {
             console.error("Failed to send error reply for gendem:", replyError);

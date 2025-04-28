@@ -1,4 +1,4 @@
-import {  SlashCommandBuilder, EmbedBuilder, version as djsVersion, MessageFlags } from 'discord.js';
+import {  SlashCommandBuilder, EmbedBuilder  } from 'discord.js';
 import {  languages  } from '../assets/descriptions.js';
 import {  answers  } from '../assets/answers.js';
 import {  getLocale  } from '../src/utils/functions.js';
@@ -26,6 +26,7 @@ export default {
 		.setDescriptionLocalizations(languages.stats.main)
 		.setDMPermission(false),
 	// Let the central handler in bot.js manage deferrals
+	ephemeral: true,
 	async execute(interaction) {
 		let lang = 'en-US'; // Default lang
 
@@ -131,7 +132,6 @@ export default {
 				statsEmbed.setFooter({ text: "Some statistics might be inaccurate due to shard errors." });
 			}
 
-			// Ensure reply is ephemeral if needed (central handler should defer correctly)
 			await interaction.editReply({ embeds: [statsEmbed] });
 
 		} catch (error) {
@@ -144,8 +144,6 @@ export default {
 					console.error("Failed to send error reply for stats command:", editError);
 				}
 			}
-			// Use flags for ephemeral error reply
-			await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
 		}
 	}
 };

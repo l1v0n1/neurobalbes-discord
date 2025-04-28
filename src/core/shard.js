@@ -82,15 +82,15 @@ manager.spawn({ delay: 15000, timeout: 90000 }) // Add delay (15s) and longer ti
     });
 
 // Optional: Basic process signal handling for graceful shutdown
-let shuttingDown = false;
+    let shuttingDown = false;
 async function gracefulShutdown() {
-    if (shuttingDown) return;
-    shuttingDown = true;
+        if (shuttingDown) return;
+        shuttingDown = true;
     console.log('[ShardManager] Received shutdown signal. Destroying all shards...');
     // The default manager doesn't have a specific graceful shutdown method
     // Killing the manager process should signal shards to terminate
     // manager.broadcastEval(client => client.destroy()); // This might be needed depending on bot logic
-    process.exit(0);
+            process.exit(0);
 }
 
 process.on('SIGINT', gracefulShutdown);
