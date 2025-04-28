@@ -307,7 +307,7 @@ async function updateText(chatid, text) {
 const ALLOWED_FIELDS_TO_CHANGE = ['talk', 'gen', 'speed', 'lang'];
 
 async function changeField(chatid, field, key) {
-    logger.debug(`[changeField ENTER] chatid=${chatid}, field=${field}, key=${key} (type: ${typeof key})`);
+    // logger.debug(`[changeField ENTER] chatid=${chatid}, field=${field}, key=${key} (type: ${typeof key})`); // Optional debug
 
     if (!isValidChatId(chatid)) {
         logger.error(`[changeField] Invalid chat ID format: ${chatid}`);
@@ -322,92 +322,76 @@ async function changeField(chatid, field, key) {
     let finalKey = key;
     // Validate and sanitize language field
     if (field === 'lang') {
-        logger.debug(`[changeField] Validating lang field. Initial value: ${key}`);
+        // logger.debug(`[changeField] Validating lang field. Initial value: ${key}`); // Optional debug
         if (finalKey === null || finalKey === undefined || finalKey === 'null' || finalKey === '') {
-            logger.warn(`[changeField] Invalid lang value detected: "${finalKey}". Defaulting to 'en'.`);
+            logger.warn(`[changeField] Invalid lang value detected for chat ${chatid}: "${finalKey}". Defaulting to 'en'.`);
             finalKey = 'en';
         }
         
         const supportedLangs = ['en', 'ru', 'uk', 'tr'];
         if (!supportedLangs.includes(finalKey)) {
-            logger.warn(`[changeField] Unsupported lang value: "${finalKey}". Defaulting to 'en'.`);
+            logger.warn(`[changeField] Unsupported lang value for chat ${chatid}: "${finalKey}". Defaulting to 'en'.`);
             finalKey = 'en';
         }
-        logger.debug(`[changeField] Final lang value after validation: ${finalKey}`);
+        // logger.debug(`[changeField] Final lang value after validation: ${finalKey}`); // Optional debug
     }
 
-    logger.info(`[changeField] Attempting to change ${field} to ${finalKey} for chat ${chatid}`);
+    // logger.info(`[changeField] Attempting to change ${field} to ${finalKey} for chat ${chatid}`); // Optional info
     
     let operationResult = null; // Define outside to ensure it's accessible
     try {
         operationResult = await withConnection(async (db) => {
             const tableName = `peer${chatid}`;
-            logger.debug(`[changeField] Using table: ${tableName}`);
+            // logger.debug(`[changeField] Using table: ${tableName}`); // Optional debug
             
-            // 1. Check table existence
-            logger.debug(`[changeField] Checking table existence...`);
-            const tableExists = await db.get(
-                `SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?`,
-                [tableName]
-            );
-            logger.debug(`[changeField] Table exists check result: ${tableExists ? 'Exists' : 'Does not exist'}`);
-            
-            if (!tableExists) {
-                logger.warn(`[changeField] Table ${tableName} doesn't exist, creating it first.`);
-                await createTable(chatid); // Ensure createTable handles logging/errors
-                logger.info(`[changeField] Table ${tableName} created.`);
-            }
+            // 1. Ensure table exists (checking is often less efficient than CREATE IF NOT EXISTS)
+            await createTable(chatid); // createTable should handle "IF NOT EXISTS"
             
             // 2. Attempt UPDATE
             const updateQuery = `UPDATE ${tableName} SET ${field} = ? WHERE peer_id = ?`;
             const updateParams = [finalKey, chatid];
-            logger.debug(`[changeField] Executing UPDATE query: ${updateQuery} with params: ${JSON.stringify(updateParams)}`);
+            // logger.debug(`[changeField] Executing UPDATE query: ${updateQuery} with params: ${JSON.stringify(updateParams)}`); // Optional debug
             
             const updateResult = await db.run(updateQuery, updateParams);
-            logger.info(`[changeField] UPDATE result: ${JSON.stringify(updateResult)}`);
-            logger.info(`[changeField] Rows changed by UPDATE: ${updateResult.changes}`);
+            // logger.info(`[changeField] UPDATE result: ${JSON.stringify(updateResult)}`); // Optional info
+            // logger.info(`[changeField] Rows changed by UPDATE: ${updateResult.changes}`); // Optional info
             
-            // 3. Handle case where UPDATE didn't change rows
+            // 3. Handle case where UPDATE didn't change rows (e.g., new guild row needed settings)
             if (updateResult.changes === 0) {
-                logger.warn(`[changeField] UPDATE affected 0 rows. Checking if peer_id ${chatid} exists...`);
+                // logger.warn(`[changeField] UPDATE affected 0 rows for ${chatid}. Checking row...`); // Optional warn
                 const rowExistsResult = await db.get(`SELECT 1 FROM ${tableName} WHERE peer_id = ? LIMIT 1`, [chatid]);
-                logger.info(`[changeField] Row existence check result: ${rowExistsResult ? 'Exists' : 'Does not exist'}`);
                 
                 if (!rowExistsResult) {
-                    logger.warn(`[changeField] No row with peer_id ${chatid}, attempting INSERT.`);
+                    // This case should be rare now due to createTable call above, but handle defensively
+                    logger.warn(`[changeField] Row still missing for ${chatid} after createTable, attempting INSERT.`);
                     const insertQuery = `INSERT INTO ${tableName} (peer_id, ${field}) VALUES (?, ?)`;
                     const insertParams = [chatid, finalKey];
-                    logger.debug(`[changeField] Executing INSERT query: ${insertQuery} with params: ${JSON.stringify(insertParams)}`);
-                    const insertResult = await db.run(insertQuery, insertParams);
-                    logger.info(`[changeField] INSERT result: ${JSON.stringify(insertResult)}`);
+                    await db.run(insertQuery, insertParams);
                 } else {
-                    logger.warn(`[changeField] Row exists but UPDATE had no effect. Current value might already be ${finalKey}, or there's another issue.`);
-                    // Log current value for debugging
-                    const currentValue = await db.get(`SELECT ${field} FROM ${tableName} WHERE peer_id = ?`, [chatid]);
-                    logger.warn(`[changeField] Current value of ${field} for ${chatid}: ${JSON.stringify(currentValue)}`);
+                    // Row exists, but value wasn't changed. Maybe it was already the target value.
+                    // logger.warn(`[changeField] Row exists for ${chatid} but UPDATE had no effect.`); // Optional warn
                 }
             }
             
             // 4. Verify the final value in the DB *before* cache invalidation
-            logger.debug(`[changeField] Verifying final value in DB for field ${field}...`);
+            // logger.debug(`[changeField] Verifying final value in DB for field ${field}...`); // Optional debug
             const verificationResult = await db.get(`SELECT ${field} FROM ${tableName} WHERE peer_id = ?`, [chatid]);
-            logger.info(`[changeField] DB Verification result for ${field}: ${JSON.stringify(verificationResult)}`);
+            // logger.info(`[changeField] DB Verification result for ${field}: ${JSON.stringify(verificationResult)}`); // Optional info
             
             // 5. Invalidate cache
             const cacheKey = `chat_${chatid}`;
             const deletedFromCache = cache.data.delete(cacheKey);
-            logger.info(`[changeField] Invalidating cache for key ${cacheKey}. Deleted: ${deletedFromCache}`);
+            // logger.info(`[changeField] Invalidating cache for key ${cacheKey}. Deleted: ${deletedFromCache}`); // Optional info
             
             return verificationResult; // Return the value found in DB after update/insert
         });
 
-        logger.info(`[changeField EXIT - SUCCESS] chatid=${chatid}, field=${field}. Final DB value: ${JSON.stringify(operationResult)}`);
+        // logger.info(`[changeField EXIT - SUCCESS] chatid=${chatid}, field=${field}. Final DB value: ${JSON.stringify(operationResult)}`); // Optional info
         return operationResult;
 
     } catch (error) {
-        logger.error(`[changeField EXIT - ERROR] Error during operation for chatid=${chatid}, field=${field}:`, error);
-        // Re-throw the error to be handled by the caller
-        throw error; 
+        logger.error(`[changeField EXIT - ERROR] Error during operation for chatid=${chatid}, field=${field}:`, { error: error?.message || error });
+        throw error; // Re-throw the error to be handled by the caller
     }
 }
 

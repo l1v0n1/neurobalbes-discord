@@ -529,123 +529,100 @@ client.once(Events.ClientReady, async c => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-	// === LOG INTERACTION EARLY ===
-	logger.info(`[InteractionCreate] Received interaction`, { 
-		interactionId: interaction.id,
-		type: interaction.type,
-		commandName: interaction.commandName, 
-		user: interaction.user?.tag || 'Unknown User', // Safer access
-		guildId: interaction.guildId
-	});
+    // === REMOVED EARLY INTERACTION LOGGING ===
 
-	// === Manual Inspection ===
-	try {
-		logger.info('[InteractionCreate] Inspecting interaction object properties:');
-		logger.info(`  - interaction keys: ${Object.keys(interaction).join(', ')}`);
-		logger.info(`  - interaction.options type: ${typeof interaction.options}`);
-		if (interaction.options) {
-			logger.info(`  - interaction.options keys: ${Object.keys(interaction.options).join(', ')}`);
-			// Log raw data/options directly without stringify if possible
-			console.log('  - interaction.options.data:', interaction.options.data); 
-			console.log('  - interaction.options._hoistedOptions:', interaction.options._hoistedOptions);
-		}
-	} catch (inspectError) {
-		logger.error('[InteractionCreate] Error during manual inspection:', inspectError);
-	}
-	// ===========================
+    if (!interaction.isChatInputCommand()) {
+        // logger.debug('[InteractionCreate] Interaction is not ChatInputCommand, skipping.'); // Optional: Keep if useful
+        return; 
+    }
 
-	if (!interaction.isChatInputCommand()) {
-		logger.debug('[InteractionCreate] Interaction is not ChatInputCommand, skipping.');
-		return; 
-	}
+    // logger.debug(`[InteractionCreate] Processing ChatInputCommand: ${interaction.commandName}`); // Optional: Keep if useful
+    const command = client.commands.get(interaction.commandName);
+    
+    if (!command) {
+        logger.error(`No command matching ${interaction.commandName} was found.`, {
+            commandName: interaction.commandName,
+            guildId: interaction.guildId,
+            userId: interaction.user.id
+        });
+        try {
+            // Only reply if the interaction hasn't been replied to yet
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: 'Sorry, that command is not available.', 
+                    ephemeral: true
+                });
+            }
+        } catch (error) {
+            logger.error(`Failed to reply to unknown command ${interaction.commandName}`, error);
+        }
+        return;
+    }
 
-	logger.debug(`[InteractionCreate] Processing ChatInputCommand: ${interaction.commandName}`);
-	const command = client.commands.get(interaction.commandName);
-	
-	if (!command) {
-		logger.error(`No command matching ${interaction.commandName} was found.`, {
-			commandName: interaction.commandName,
-			guildId: interaction.guildId,
-			userId: interaction.user.id
-		});
-		try {
-			// Only reply if the interaction hasn't been replied to yet
-			if (!interaction.replied && !interaction.deferred) {
-				await interaction.reply({ 
-					content: 'Sorry, that command is not available.', 
-					ephemeral: true
-				});
-			}
-		} catch (error) {
-			logger.error(`Failed to reply to unknown command ${interaction.commandName}`, error);
-		}
-		return;
-	}
-
-	try {
-		// Log command usage
-		logger.command(
-			interaction.commandName, 
-			interaction.guildId, 
-			interaction.user.id, 
-			'started'
-		);
-		
-		// Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
-		if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
-			await interaction.deferReply({
-				ephemeral: command.ephemeral ? true : undefined
-			});
-		}
-		
-		await command.execute(interaction);
-		
-		// Log successful execution
-		logger.command(
-			interaction.commandName, 
-			interaction.guildId,
-			interaction.user.id, 
-			'completed'
-		);
-	} catch (error) {
-		logger.error(`Error executing command ${interaction.commandName}`, {
-			error,
-			commandName: interaction.commandName,
-			guildId: interaction.guildId,
-			userId: interaction.user.id
-		});
-		
-		try {
-			const errorReply = { 
-				content: 'An error occurred while executing this command.', 
-				ephemeral: true
-			};
-			
-			if (interaction.replied) {
-				await interaction.followUp(errorReply);
-			} else if (interaction.deferred) {
-				await interaction.editReply(errorReply);
-			} else {
-				await interaction.reply(errorReply);
-			}
-			
-			// Log the error response
-			logger.command(
-				interaction.commandName, 
-				interaction.guildId,
-				interaction.user.id, 
-				'error_response_sent'
-			);
-		} catch (replyError) {
-			logger.error(`Failed to send error response for ${interaction.commandName}`, {
-				error: replyError,
-				originalError: error,
-				commandName: interaction.commandName,
-				guildId: interaction.guildId,
-				userId: interaction.user.id
-			});
-		}
-	}
+    try {
+        // Log command usage
+        logger.command(
+            interaction.commandName, 
+            interaction.guildId, 
+            interaction.user.id, 
+            'started'
+        );
+        
+        // Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
+        if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
+            await interaction.deferReply({
+                ephemeral: command.ephemeral ? true : undefined
+            });
+        }
+        
+        await command.execute(interaction);
+        
+        // Log successful execution
+        logger.command(
+            interaction.commandName, 
+            interaction.guildId,
+            interaction.user.id, 
+            'completed'
+        );
+    } catch (error) {
+        logger.error(`Error executing command ${interaction.commandName}`, {
+            error,
+            commandName: interaction.commandName,
+            guildId: interaction.guildId,
+            userId: interaction.user.id
+        });
+        
+        try {
+            const errorReply = { 
+                content: 'An error occurred while executing this command.', 
+                ephemeral: true
+            };
+            
+            if (interaction.replied) {
+                await interaction.followUp(errorReply);
+            } else if (interaction.deferred) {
+                await interaction.editReply(errorReply);
+            } else {
+                await interaction.reply(errorReply);
+            }
+            
+            // Log the error response
+            logger.command(
+                interaction.commandName, 
+                interaction.guildId,
+                interaction.user.id, 
+                'error_response_sent'
+            );
+        } catch (replyError) {
+            logger.error(`Failed to send error response for ${interaction.commandName}`, {
+                error: replyError,
+                originalError: error,
+                commandName: interaction.commandName,
+                guildId: interaction.guildId,
+                userId: interaction.user.id
+            });
+        }
+    }
 });
 
 client.on(Events.GuildCreate, async guild => {

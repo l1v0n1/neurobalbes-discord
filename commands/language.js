@@ -40,84 +40,39 @@ export default {
 
 			const guildId = interaction.guild.id;
             
-            // === Log the ENTIRE interaction object ===
+            let newLang = 'en'; // Default value
             try {
-                // Use JSON.stringify with a replacer to handle potential circular references
-                const getCircularReplacer = () => {
-                  const seen = new WeakSet();
-                  return (key, value) => {
-                    if (typeof value === "object" && value !== null) {
-                      if (seen.has(value)) {
-                        return "[Circular]"; // Replace circular reference
-                      }
-                      seen.add(value);
-                    }
-                    return value;
-                  };
-                };
-                logger.info('Full interaction object structure:', {
-                    guildId,
-                    interactionString: JSON.stringify(interaction, getCircularReplacer(), 2)
-                });
-            } catch(logError) {
-                 logger.error('Error stringifying full interaction object:', { guildId, logError });
-            }
-            // ========================================
-            
-            logger.info('[language.js] Attempting to get language option...');
-            let newLang = null;
-            let optionType = 'unknown';
-            try {
-                 newLang = interaction.options.getString('type');
-                 optionType = typeof newLang;
-                 logger.info(`[language.js] getString('type') result: ${newLang}, type: ${optionType}`);
+                 newLang = interaction.options.getString('type'); 
+                 // Basic validation happens below
             } catch (e) {
-                logger.error('[language.js] Error calling getString(\'type\'):', { guildId: guildId, error: e });
-                // Keep fallback minimal as it shouldn't be needed now
-                newLang = 'en'; 
+                // Log only if fetching the option fails unexpectedly
+                logger.error('[language.js] Failed to get string option \'type\':', { guildId: guildId, error: e?.message || e });
+                newLang = 'en'; // Default on error
             }
 
-            // Validate language value (simplified)
+            // Validate language value (Simplified)
             if (typeof newLang !== 'string' || !SUPPORTED_LANGUAGES.includes(newLang)) {
-                 logger.error(`[language.js] Invalid or unsupported language value received: "${newLang}" (type: ${typeof newLang})`, {
-                     guildId: guildId,
-                     newLang: newLang,
-                     type: typeof newLang
-                 });
-                 // Default to 'en' if validation fails
+                 logger.warn(`[language.js] Invalid or unsupported language value received: "${newLang}". Defaulting to 'en'.`, { guildId: guildId });
                  newLang = 'en'; 
-                 logger.info('[language.js] Defaulting newLang to \'en\'.');
             }
-            
-            logger.info(`[language.js] Final language value to use: ${newLang}`);
-            
-            // Log the request
+
+            // Log the request *after* validation
             logger.info(`Language change requested`, {
-                guildId,
+                guildId: guildId,
                 requestedLang: newLang,
                 user: interaction.user.id
             });
             
 			// Get current language for response
             const chatBefore = await getChat(guildId);
-			const currentLang = chatBefore?.lang || 'en';
+			const currentLang = chatBefore?.lang || 'en'; // Rely on getChat/methods.js for db null checks
             
-            logger.info(`Current language before change`, {
-                guildId,
-                currentLang,
-                chatData: JSON.stringify(chatBefore)
-            });
+            // logger.info(`Current language before change`, { // Optional: Keep if needed
+            //     guildId,
+            //     currentLang,
+            // });
             
-            // Check if current language is null or invalid
-            if (currentLang === null || currentLang === 'null' || currentLang === undefined || currentLang === '') {
-                logger.warn(`Invalid current language detected`, {
-                    guildId,
-                    invalidLang: currentLang
-                });
-                // We'll still proceed with the change, but log the issue
-            }
-            
-			// If it's the same language, notify user (use proper language)
+			// If it's the same language, notify user
 			if (currentLang === newLang) {
 				const alreadyMessage = answers.language.already[currentLang] || answers.language.already.en;
 				const langName = LANGUAGE_NAMES[newLang];
@@ -126,70 +81,66 @@ export default {
 				});
 			}
 			
-			// First, let's send a response to the user that we're working on it
+			// Send initial response
 			await interaction.editReply({
 				content: `Changing language from ${LANGUAGE_NAMES[currentLang] || currentLang} to ${LANGUAGE_NAMES[newLang]}...`
 			});
 			
 			try {
-                // Use updateLanguage which has our enhanced validation instead of direct database call
+                // Use updateLanguage which has enhanced validation
                 const result = await updateLanguage(guildId, newLang);
-                logger.info(`Database update attempted via updateLanguage`, {
-                    guildId,
-                    newLang,
-                    result: JSON.stringify(result)
-                });
+                // logger.info(`Database update attempted via updateLanguage`, { // Optional
+                //     guildId,
+                //     newLang,
+                // });
                 
-                // Wait a second to ensure database writes are committed
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Wait briefly (optional, consider removing if not strictly needed)
+                // await new Promise(resolve => setTimeout(resolve, 500));
                 
-                // Verify the change directly from database
+                // Verify the change
                 const chatAfter = await getChat(guildId);
                 const updatedLang = chatAfter?.lang;
                 
-                logger.info(`Language after update attempt`, {
-                    guildId,
-                    requestedLang: newLang,
-                    actualLang: updatedLang,
-                    fullChat: JSON.stringify(chatAfter)
-                });
+                // logger.info(`Language after update attempt`, { // Optional
+                //     guildId,
+                //     requestedLang: newLang,
+                //     actualLang: updatedLang,
+                // });
                 
                 if (updatedLang !== newLang) {
-                    logger.error(`Language update failed, values don't match`, {
+                    logger.error(`Language update verification failed!`, {
                         guildId,
                         requestedLang: newLang,
                         actualLang: updatedLang
                     });
                     
                     return interaction.editReply({
-                        content: `Failed to update language. Requested: ${newLang}, actual: ${updatedLang || 'none'}`
+                        content: `Failed to verify language update. Requested: ${newLang}, Actual: ${updatedLang || 'none'}`
                     });
                 }
                 
-                // Get language name from our constant
+                // Send confirmation message
                 const languageName = LANGUAGE_NAMES[newLang];
-                
-                // Send confirmation message in the selected language
                 let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
                 responseMessage = responseMessage.replace('%VAR%', languageName);
                 
                 await interaction.editReply({
-                    content: responseMessage + `\n(Debug: lang=${updatedLang})`
+                    content: responseMessage // Removed debug info from user message
                 });
             } catch (dbError) {
                 logger.error(`Database error during language update`, {
-                    error: dbError,
-                    guildId,
-                    requestedLang: newLang
+                    guildId: guildId,
+                    requestedLang: newLang,
+                    error: dbError?.message || dbError // Log error message
                 });
                 
                 return interaction.editReply({
-                    content: `Database error: ${dbError.message}`
+                    content: `A database error occurred: ${dbError.message}`
                 });
             }
 		} catch (error) {
 			logger.error('Error in language command', {
-				error,
+				error: error?.message || error,
 				guildId: interaction.guild?.id,
 				userId: interaction.user.id
 			});

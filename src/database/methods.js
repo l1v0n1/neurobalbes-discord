@@ -13,27 +13,26 @@ export { SUPPORTED_LANGUAGES };
  */
 export async function getLanguage(guildId) {
     try {
-        console.log(`[DEBUG] getLanguage: Fetching language for guild ${guildId}`);
+        // logger.debug(`[getLanguage] Fetching language for guild ${guildId}`); // Optional debug
         const chat = await getChat(guildId);
         
         // Check for null, undefined, empty string or 'null' value
         let language = chat?.lang;
         if (language === null || language === undefined || language === '' || language === 'null') {
-            console.log(`[DEBUG] getLanguage: Invalid language '${language}' detected, defaulting to 'en'`);
+            // logger.debug(`[getLanguage] Invalid language '${language}' detected for ${guildId}, defaulting to 'en'`); // Optional debug
             language = 'en';
         }
         
         // Validate against supported languages
         if (!SUPPORTED_LANGUAGES.includes(language)) {
-            console.log(`[DEBUG] getLanguage: Unsupported language '${language}' detected, defaulting to 'en'`);
+            // logger.debug(`[getLanguage] Unsupported language '${language}' detected for ${guildId}, defaulting to 'en'`); // Optional debug
             language = 'en';
         }
         
-        console.log(`[DEBUG] getLanguage: Retrieved language ${language} for guild ${guildId}`);
-        console.log(`[DEBUG] getLanguage: Full chat object: ${JSON.stringify(chat)}`);
+        // logger.debug(`[getLanguage] Retrieved language ${language} for guild ${guildId}`); // Optional debug
         return language;
     } catch (error) {
-        console.error(`Error getting language for guild ${guildId}:`, error);
+        logger.error(`Error getting language for guild ${guildId}:`, { error: error?.message || error });
         return 'en'; // Default to English on error
     }
 }
@@ -45,29 +44,28 @@ export async function getLanguage(guildId) {
  * @returns {Promise<void>}
  */
 export async function updateLanguage(guildId, language) {
+    let validatedLanguage = language;
     try {
-        console.log(`[DEBUG] updateLanguage: Updating language to ${language} for guild ${guildId}`);
+        // logger.debug(`[updateLanguage] Updating language to ${language} for guild ${guildId}`); // Optional debug
         
         // Handle null, undefined, empty string or invalid language values
-        if (language === null || language === undefined || language === '' || language === 'null' || !SUPPORTED_LANGUAGES.includes(language)) {
-            console.error(`[DEBUG] updateLanguage: Invalid language '${language}', defaulting to 'en'`);
-            language = 'en'; // Default to English for invalid inputs
+        if (validatedLanguage === null || validatedLanguage === undefined || validatedLanguage === '' || validatedLanguage === 'null' || !SUPPORTED_LANGUAGES.includes(validatedLanguage)) {
+            // logger.warn(`[updateLanguage] Invalid language '${validatedLanguage}' for ${guildId}, defaulting to 'en'`); // Optional warn
+            validatedLanguage = 'en'; // Default to English for invalid inputs
         }
         
-        const result = await changeField(guildId, 'lang', language);
-        console.log(`[DEBUG] updateLanguage: Result from changeField: ${JSON.stringify(result)}`);
+        const result = await changeField(guildId, 'lang', validatedLanguage);
+        // logger.debug(`[updateLanguage] Result from changeField: ${JSON.stringify(result)}`); // Optional debug
         
-        // Verify the change
-        const verifiedLang = await getLanguage(guildId);
-        console.log(`[DEBUG] updateLanguage: Verified language after update: ${verifiedLang}`);
-        
-        if (verifiedLang !== language) {
-            console.error(`[DEBUG] updateLanguage: Language verification failed! Expected ${language}, got ${verifiedLang}`);
-        }
+        // Verify the change (optional, relies on cache possibly being stale briefly)
+        // const verifiedLang = await getLanguage(guildId);
+        // if (verifiedLang !== validatedLanguage) { 
+        //    logger.error(`[updateLanguage] Language verification failed! Expected ${validatedLanguage}, got ${verifiedLang} for guild ${guildId}`);
+        // }
         
         return result;
     } catch (error) {
-        console.error(`Error updating language for guild ${guildId}:`, error);
+        logger.error(`Error updating language for guild ${guildId} to ${language}:`, { error: error?.message || error });
         throw error;
     }
 }
