@@ -21,20 +21,33 @@ try {
 }
 
 // Calculate appropriate memory allocation based on system specs
-function calculateMemoryLimit() {
-    const totalMemory = Math.floor(os.totalmem() / (1024 * 1024 * 1024)); // Convert to GB
-    const freeMemory = Math.floor(os.freemem() / (1024 * 1024 * 1024)); // Convert to GB
+function calculateMemoryLimit(numShards) {
+    const totalMemoryGB = Math.floor(os.totalmem() / (1024 * 1024 * 1024));
+    const freeMemoryGB = Math.floor(os.freemem() / (1024 * 1024 * 1024));
     
-    console.log(`System memory: ${totalMemory}GB total, ${freeMemory}GB free`);
+    console.log(`System memory: ${totalMemoryGB}GB total, ${freeMemoryGB}GB free`);
     
-    // Allocate memory based on available system resources
     // Default to 4GB per shard if calculation fails or not enough free memory
-    const baseMemory = 4096;
-    // Try to leave at least 2GB for the system if possible
-    const calculatedMemory = freeMemory > 4 ? Math.floor(((freeMemory - 2) / (config.shardCount === 'auto' ? 2 : parseInt(config.shardCount, 10))) * 1024) : baseMemory;
-    // Use at least 2GB, but max 4GB unless specifically configured higher
-    const perShardMemoryMB = Math.max(2048, Math.min(baseMemory, calculatedMemory)); 
+    const baseMemoryMB = 4096;
+    let perShardMemoryMB = baseMemoryMB;
 
+    // Try to calculate based on free memory, leaving ~2GB for OS/other processes
+    if (freeMemoryGB > 4 && numShards > 0) { 
+        const availableForShardsMB = (freeMemoryGB - 2) * 1024;
+        const calculatedMB = Math.floor(availableForShardsMB / numShards);
+        // Use calculated value if it's reasonable (between 2GB and 8GB), otherwise stick to base
+        if (calculatedMB >= 2048 && calculatedMB <= 8192) {
+             perShardMemoryMB = calculatedMB;
+        } else if (calculatedMB < 2048) {
+             perShardMemoryMB = 2048; // Minimum 2GB if calculation is too low
+        }
+        // If calculation is > 8GB, stick to base unless overridden in config
+    } else if (freeMemoryGB <= 4) {
+        // Not much free RAM, force minimum reasonable value
+        perShardMemoryMB = 2048; 
+    }
+
+    console.log(`Calculated memory per shard: ${perShardMemoryMB}MB`);
     return `--max-old-space-size=${perShardMemoryMB}`;
 }
 
@@ -404,18 +417,16 @@ async function startSharding() {
         console.log('Starting sharding process...');
         
         // Calculate optimal memory limit if not specified
-        let shardArgs = config.shardArgs;
-        if (!shardArgs || !shardArgs.some(arg => arg.includes('--max-old-space-size'))) {
-            const memoryLimit = calculateMemoryLimit();
-            shardArgs = shardArgs || [];
-            shardArgs.push(memoryLimit);
-            console.log(`Calculated memory limit: ${memoryLimit}`);
+        let nodeArgs = config.shardArgs || [];
+        if (!nodeArgs.some(arg => arg.includes('--max-old-space-size'))) {
+            const memoryLimitArg = calculateMemoryLimit(await calculateShardCount());
+            nodeArgs.push(memoryLimitArg);
         }
         
         // Calculate shard count
         const shardCount = await calculateShardCount();
         console.log(`Starting bot with ${shardCount} shard(s)...`);
-        console.log(`Using Node.js args: ${shardArgs.join(' ')}`);
+        console.log(`Using Node.js args: ${nodeArgs.join(' ')}`);
 
         // Get absolute path to bot.js
         const botPath = path.join(__dirname, 'bot.js');
@@ -426,7 +437,7 @@ async function startSharding() {
             totalShards: shardCount,
             respawn: false, // Disable automatic respawn by discord.js, we handle it manually
             timeout: 300000, // 5 minutes
-            execArgv: shardArgs
+            execArgv: nodeArgs
         });
 
         // Add rate limit protection

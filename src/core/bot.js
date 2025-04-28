@@ -502,29 +502,38 @@ async function generateAndSendReply(channelId, textbase, genType) {
 
 // Set up event handlers
 client.once(Events.ClientReady, async c => {
+	logger.info('[ClientReady] Event received!');
 	try {
-		logger.info(`Ready! Logged in as ${c.user.tag}`);
-		logger.info(`Serving ${client.guilds.cache.size} guilds`);
+		logger.info(`[ClientReady] Ready! Logged in as ${c.user.tag}`);
+		logger.info(`[ClientReady] Serving ${client.guilds.cache.size} guilds on this shard.`);
 		
-		// Initialize and check guilds
+		logger.info('[ClientReady] Starting initial guild check...');
 		await checkGuildsForExisting();
+		logger.info('[ClientReady] Guild check completed.');
 		
-		// Send heartbeats to shard manager if sharded
+		// Send heartbeats/ready signal to shard manager if sharded
 		if (client.shard) {
-			// Signal to the shard manager that we're ready
+			logger.info('[ClientReady] Sending READY signal to shard manager.');
 			client.shard.send({ type: 'READY', id: client.shard.ids[0] });
 			
-			// Setup regular heartbeats
+			logger.info('[ClientReady] Setting up heartbeat interval.');
 			setInterval(() => {
 				try {
+					// logger.debug('[Heartbeat] Sending heartbeat...'); // Optional: enable for verbose logs
 					client.shard.send('heartbeat');
 				} catch (error) {
-					logger.error(`Failed to send heartbeat:`, error);
+					logger.error(`[Heartbeat] Failed to send heartbeat:`, { error: error?.message || error });
 				}
-			}, 30000);
+			}, HEARTBEAT_INTERVAL); // Use constant
 		}
+		logger.info('[ClientReady] Handler finished successfully.');
 	} catch (error) {
-		logger.error(`Error in ready event:`, error);
+		logger.error(`[ClientReady] Error during ready event processing:`, {
+			 errorMessage: error?.message,
+			 errorStack: error?.stack
+		});
+		// Consider exiting if ready handler fails critically
+		// process.exit(1);
 	}
 });
 
