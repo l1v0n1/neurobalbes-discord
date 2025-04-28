@@ -171,67 +171,56 @@ class CustomShardingManager extends ShardingManager {
 
     async handleShardDeath(shard, processError) {
         const status = this.status.get(shard.id);
-        if (!status) return;
-        
+        if (!status) {
+            console.warn(`[Shard ${shard.id}] Status not found during handleShardDeath.`);
+            return;
+        }
+
         // Log the error details
         if (processError) {
-            console.error(`[Shard ${shard.id}] Death error details:`, processError);
+            console.error(`[Shard ${shard.id}] Death detected. Error details:`, processError);
+        } else {
+            console.warn(`[Shard ${shard.id}] Death detected with no processError object.`);
         }
-        
+
+        // Increment restart counter only if below limit
         if (status.restarts < 5) {
-            console.log(`[Shard ${shard.id}] Attempting resurrection (${status.restarts + 1}/5)...`);
             status.restarts++;
-            
+            console.log(`[Shard ${shard.id}] Attempting resurrection (${status.restarts}/5)...`);
+
             // Increasing delay based on restart attempts
             const delay = 5000 + (status.restarts * 3000);
-            
-            try {
-                setTimeout(async () => {
+            console.log(`[Shard ${shard.id}] Waiting ${delay / 1000} seconds before respawn attempt.`);
+
+            setTimeout(async () => {
+                console.log(`[Shard ${shard.id}] Initiating respawn...`);
+                try {
+                    // Safer listener removal
                     try {
-                        // Before respawning, make sure any previous process is fully cleaned up
-                        try {
-                            await shard.kill({ force: true });
-                            console.log(`[Shard ${shard.id}] Successfully killed previous shard process`);
-                        } catch (killError) {
-                            // Ignore kill errors, process might already be gone
-                        }
-                        
-                        // Clear existing listeners to prevent memory leaks
-                        shard.removeAllListeners('ready');
-                        shard.removeAllListeners('disconnect');
-                        shard.removeAllListeners('death');
-                        
-                        // Then respawn with increased timeout
-                        await shard.respawn({ 
-                            delay: 1000,
-                            timeout: 300000 // 5 minutes timeout, same as initial spawn
-                        });
-                        console.log(`[Shard ${shard.id}] Successfully resurrected`);
-                    } catch (innerError) {
-                        console.error(`[Shard ${shard.id}] Failed inner resurrection:`, innerError);
-                        
-                        // If we hit the ShardingReadyDied error, try one more time with a clean spawn
-                        if (innerError.code === 'ShardingReadyDied' && !status._cleanSpawnAttempted) {
-                            status._cleanSpawnAttempted = true;
-                            console.log(`[Shard ${shard.id}] Attempting a clean spawn after receiving ShardingReadyDied`);
-                            
-                            try {
-                                // Create a completely new shard with the same ID
-                                // This avoids potential issues with the old shard instance
-                                const newShard = this.createShard(shard.id);
-                                await newShard.spawn({ timeout: 300000 });
-                                console.log(`[Shard ${shard.id}] Clean spawn successful`);
-                            } catch (newSpawnError) {
-                                console.error(`[Shard ${shard.id}] Clean spawn failed:`, newSpawnError);
-                            }
-                        }
+                        shard.removeAllListeners(); // Remove all listeners to be safe
+                        console.log(`[Shard ${shard.id}] Removed listeners from old shard instance.`);
+                    } catch (listenerError) {
+                        console.error(`[Shard ${shard.id}] Error removing listeners:`, listenerError);
+                        // Continue anyway, the old shard instance might be unusable
                     }
-                }, delay);
-            } catch (error) {
-                console.error(`[Shard ${shard.id}] Failed to resurrect:`, error);
-            }
+
+                    // Respawn with increased timeout
+                    await shard.respawn({ 
+                        delay: 1000,
+                        timeout: 300000 // 5 minutes timeout
+                    });
+                    console.log(`[Shard ${shard.id}] Respawn command issued successfully.`);
+                    // Reset clean spawn flag if respawn is attempted
+                    status._cleanSpawnAttempted = false; 
+                } catch (respawnError) {
+                    console.error(`[Shard ${shard.id}] Respawn attempt failed:`, respawnError);
+                    // Consider adding logic here if respawn fails repeatedly
+                }
+            }, delay);
+
         } else {
-            console.error(`[Shard ${shard.id}] Shard died too many times, manual intervention required`);
+            console.error(`[Shard ${shard.id}] Shard died too many times (${status.restarts} attempts). Manual intervention required. Stopping automatic respawn.`);
+            // Optionally notify an admin or take other actions
         }
     }
 
@@ -239,49 +228,70 @@ class CustomShardingManager extends ShardingManager {
         // Stop any existing monitoring
         this.stopMonitoring();
         
+        console.log('[Shard Manager] Starting health monitoring...');
         // Monitor shard health every minute
         this.monitorInterval = setInterval(() => {
             const now = Date.now();
             this.status.forEach((status, shardId) => {
-                if (status.status === 'ready' && now - status.lastHeartbeat > 60000) {
-                    console.warn(`[Shard ${shardId}] No heartbeat received in 60s, investigating...`);
-                    
-                    const shard = this.shards.get(shardId);
-                    if (!shard) {
-                        console.error(`[Shard ${shardId}] Shard instance not found`);
-                        return;
+                // Only monitor shards that are supposed to be ready
+                if (status.status === 'ready') { 
+                    if (now - status.lastHeartbeat > 90000) { // Increased grace period to 90s
+                        console.warn(`[Shard ${shardId}] No heartbeat received in 90s, investigating...`);
+                        
+                        const shard = this.shards.get(shardId);
+                        if (!shard) {
+                            console.error(`[Shard ${shardId}] Shard instance not found during monitoring check.`);
+                            // Update status if shard is missing
+                            if (status.status !== 'dead') {
+                                status.status = 'missing';
+                                this.handleShardDeath(shard, { message: 'Shard instance missing' });
+                            }
+                            return;
+                        }
+                        
+                        // Check shard process connectivity first
+                        if (!shard.process?.connected) {
+                            console.error(`[Shard ${shardId}] Process is not connected. Assuming dead.`);
+                            this.handleShardDeath(shard, { message: 'Process not connected' });
+                            return;
+                        }
+                        
+                        // Try evaluating ping
+                        console.log(`[Shard ${shardId}] Evaluating ping...`);
+                        shard.eval('this.ws.ping')
+                            .then(ping => {
+                                console.log(`[Shard ${shardId}] Ping result: ${ping}`);
+                                if (ping === -1) {
+                                    console.error(`[Shard ${shardId}] Ping returned -1, connection appears dead. Restarting.`);
+                                    // Don't call handleShardDisconnect, go straight to death handler
+                                    this.handleShardDeath(shard, { message: 'Ping returned -1' });
+                                } else {
+                                    // If ping is okay, maybe the heartbeat message got lost?
+                                    console.warn(`[Shard ${shardId}] Ping is okay (${ping}ms), but heartbeat is missing. Monitoring.`);
+                                    // Optionally, try sending a ping request *to* the shard?
+                                }
+                            })
+                            .catch(error => {
+                                console.error(`[Shard ${shardId}] Failed ping evaluation:`, error);
+                                
+                                // If evaluation fails, shard/IPC is likely dead
+                                console.error(`[Shard ${shardId}] Assuming shard is dead due to ping evaluation failure.`);
+                                this.handleShardDeath(shard, { message: 'Ping evaluation failed', error: error.message });
+                            });
                     }
-                    
-                    shard.eval('this.ws.ping')
-                        .then(ping => {
-                            if (ping === -1) {
-                                console.error(`[Shard ${shardId}] Connection appears dead, attempting restart`);
-                                this.handleShardDisconnect(shard);
-                            } else {
-                                console.log(`[Shard ${shardId}] Ping check passed: ${ping}ms`);
-                            }
-                        })
-                        .catch(error => {
-                            console.error(`[Shard ${shardId}] Failed to check ping:`, error);
-                            
-                            // If we can't evaluate code, the shard is likely dead
-                            if (error.message.includes('Cannot read properties of null') || 
-                                error.message.includes('Not connected to worker')) {
-                                console.error(`[Shard ${shardId}] Shard appears to be dead, attempting resurrection`);
-                                this.handleShardDeath(shard, { message: 'Failed ping check' });
-                            }
-                        });
                 }
             });
-        }, 60000);
+        }, 60000); // Check every 60 seconds
 
         // Reset restart counters every 6 hours if shard is stable
         this.resetInterval = setInterval(() => {
-            this.status.forEach(status => {
-                if (status.status === 'ready' && Date.now() - status.lastHeartbeat < 300000) {
+            console.log('[Shard Manager] Checking to reset restart counters...');
+            this.status.forEach((status, shardId) => {
+                if (status.status === 'ready' && Date.now() - status.lastHeartbeat < 300000) { // Stable for 5 mins
                     if (status.restarts > 0) {
-                        console.log(`Resetting restart counter for shard with id ${status.id} (was ${status.restarts})`);
+                        console.log(`[Shard ${shardId}] Resetting restart counter (was ${status.restarts})`);
                         status.restarts = 0;
+                        status._cleanSpawnAttempted = false; // Also reset clean spawn attempt flag
                     }
                 }
             });
@@ -395,6 +405,7 @@ async function startSharding() {
             const memoryLimit = calculateMemoryLimit();
             shardArgs = shardArgs || [];
             shardArgs.push(memoryLimit);
+            console.log(`Calculated memory limit: ${memoryLimit}`);
         }
         
         // Calculate shard count
@@ -409,13 +420,13 @@ async function startSharding() {
         const manager = new CustomShardingManager(botPath, {
             token: config.token,
             totalShards: shardCount,
-            respawn: true,
-            timeout: 300000, // Increased from 60000 to 300000 (5 minutes)
+            respawn: false, // Disable automatic respawn by discord.js, we handle it manually
+            timeout: 300000, // 5 minutes
             execArgv: shardArgs
         });
 
         // Add rate limit protection
-        setupRateLimitProtection(manager);
+        // setupRateLimitProtection(manager); // Temporarily disable if suspected of causing issues
 
         // Start monitoring
         manager.startMonitoring();
@@ -423,42 +434,30 @@ async function startSharding() {
         // Spawn shards
         console.log('Spawning shards...');
         await manager.spawn({
+            amount: shardCount, // Specify amount explicitly
             delay: 7500, // 7.5 seconds delay between shard spawns
-            timeout: 300000 // Increased from 60000 to 300000 (5 minutes)
-        }).catch(error => {
-            console.error('Error during shard spawn:', error);
-            
-            // Try to provide more helpful diagnostics
-            if (error.code === 'ShardingReadyTimeout') {
-                console.log('Shard ready timeout. This could be due to:');
-                console.log('1. Network connectivity issues');
-                console.log('2. Authentication problems with the Discord API');
-                console.log('3. High server load or rate limiting');
-                console.log('4. Errors in the client initialization code');
-                
-                // Check if token is properly configured
-                if (!config.token || config.token === 'YOUR_TOKEN_HERE') {
-                    console.error('ERROR: Invalid bot token configuration');
-                }
-            }
-            
-            throw error;
+            timeout: 300000 // 5 minutes
         });
         
         console.log('All shards spawned successfully');
         
         // Update all shard stats after 30 seconds to let them initialize
         setTimeout(async () => {
-            await manager.updateAllShardStats();
-            manager.logStats();
+            try {
+                await manager.updateAllShardStats();
+                manager.logStats();
+            } catch (statsError) {
+                console.error('Error during initial stats update:', statsError);
+            }
         }, 30000);
         
         // Handle process termination
         setupShutdownHandlers(manager);
 
     } catch (error) {
-        console.error('Failed to start sharding:', error);
-        process.exit(1);
+        // Catch errors during the initial manager setup and spawn
+        console.error('[CRITICAL] Failed to start sharding manager or spawn initial shards:', error);
+        process.exit(1); // Exit if manager cannot start
     }
 }
 
@@ -469,15 +468,15 @@ function setupShutdownHandlers(manager) {
         if (shuttingDown) return;
         shuttingDown = true;
         
-        console.log('Received shutdown signal. Starting graceful shutdown...');
+        console.log('[Manager] Received shutdown signal. Starting graceful shutdown...');
         
         try {
             await manager.gracefulShutdown();
-            console.log('Graceful shutdown completed');
+            console.log('[Manager] Graceful shutdown completed');
             process.exit(0);
         } catch (error) {
-            console.error('Error during graceful shutdown:', error);
-            process.exit(1);
+            console.error('[Manager] Error during graceful shutdown:', error);
+            process.exit(1); // Exit forcefully if shutdown fails
         }
     }
     
@@ -486,60 +485,22 @@ function setupShutdownHandlers(manager) {
     process.on('SIGTERM', shutdown);
     process.on('SIGUSR2', shutdown); // For Nodemon restart
     
-    // Handle uncaught exceptions
-    process.on('uncaughtException', error => {
-        console.error('Uncaught exception in shard manager:', error);
+    // Handle uncaught exceptions in the manager process
+    process.on('uncaughtException', (error, origin) => {
+        console.error('[Manager CRITICAL] Uncaught exception:', error);
+        console.error(`[Manager CRITICAL] Origin: ${origin}`);
         
-        // Fast check for I/O errors without complex operations
-        if (error.code === 'EIO' || error.message.includes('write EIO')) {
-            console.error('I/O Error detected, attempting recovery...');
-            // Don't exit - let the process continue
-            return;
-        }
-        
-        // For other errors, proceed with normal shutdown
-        shutdown().catch(() => process.exit(1));
+        // Attempt graceful shutdown, but exit forcefully if it fails
+        shutdown().catch(() => process.exit(1)); 
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('[Manager CRITICAL] Unhandled promise rejection:', reason);
+        // Potentially log promise details if needed
+        // Decide if shutdown is necessary based on the rejection reason
+        // For now, just log it.
     });
 }
 
-// Add rate limiting protection for API calls - optimized version
-function setupRateLimitProtection(manager) {
-    // Lightweight rate limiting that only applies during high traffic periods
-    let apiCallCounter = 0;
-    let lastResetTime = Date.now();
-    const MAX_CALLS_PER_MINUTE = 100;
-    const RATE_LIMIT_RESET_INTERVAL = 60000; // 1 minute
-    
-    // More efficient rate limit check without an interval
-    const checkRateLimit = () => {
-        const now = Date.now();
-        // Reset counter if minute has passed
-        if (now - lastResetTime > RATE_LIMIT_RESET_INTERVAL) {
-            apiCallCounter = 0;
-            lastResetTime = now;
-            return false;
-        }
-        
-        return apiCallCounter > MAX_CALLS_PER_MINUTE;
-    };
-    
-    // Only patch spawn method, which is called infrequently
-    const origSpawn = manager.spawn;
-    manager.spawn = async function(...args) {
-        apiCallCounter += 3; // Less aggressive counting
-        
-        if (checkRateLimit()) {
-            console.warn('Rate limit prevention triggered - delaying shard spawn');
-            // Wait enough time for the rate limit to reset
-            const timeToWait = RATE_LIMIT_RESET_INTERVAL - (Date.now() - lastResetTime);
-            await new Promise(resolve => setTimeout(resolve, timeToWait + 1000));
-            apiCallCounter = 0;
-            lastResetTime = Date.now();
-        }
-        
-        return origSpawn.apply(this, args);
-    };
-}
-
-// Start the sharding process
+// --- Start the sharding process --- 
 startSharding();
