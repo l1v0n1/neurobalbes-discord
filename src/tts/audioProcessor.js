@@ -1,5 +1,7 @@
 import { createAudioPlayer, createAudioResource, joinVoiceChannel, getVoiceConnection, AudioPlayerStatus } from '@discordjs/voice';
 import fetch from 'node-fetch';
+import { Readable } from 'node:stream';
+import logger from '../utils/logger';
 
 // Voice API configuration
 const API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -32,9 +34,12 @@ export async function processAudio(text, voiceChannel, interaction) {
             };
         }
 
+        // Convert Buffer to Readable stream
+        const audioStream = Readable.from(audioData);
+
         // Create audio player and resource
         const player = createAudioPlayer();
-        const resource = createAudioResource(audioData);
+        const resource = createAudioResource(audioStream);
         
         connection.subscribe(player);
         player.play(resource);
@@ -83,6 +88,8 @@ async function generateSpeech(text) {
             return generateFreeTTS(text);
         }
 
+        // Use ElevenLabs
+        logger.info('[generateSpeech] Using ElevenLabs API...');
         const response = await fetch(`${API_URL}/${DEFAULT_VOICE_ID}`, {
             method: 'POST',
             headers: {
@@ -99,14 +106,26 @@ async function generateSpeech(text) {
             }),
         });
 
+        // Log Response Headers
+        logger.info('[generateSpeech] ElevenLabs Response Headers:', { 
+            status: response.status,
+            contentType: response.headers.get('content-type')
+        });
+
         if (!response.ok) {
-            console.error('TTS API error:', await response.text());
+            logger.error('ElevenLabs TTS API error:', { status: response.status, text: await response.text() });
             return null;
         }
 
-        return Buffer.from(await response.arrayBuffer());
+        const audioBuffer = Buffer.from(await response.arrayBuffer());
+        // Log Buffer Snippet
+        logger.info('[generateSpeech] ElevenLabs Audio Buffer Snippet:', { 
+            length: audioBuffer.length,
+            snippetHex: audioBuffer.slice(0, 16).toString('hex') // First 16 bytes as hex
+        });
+        return audioBuffer;
     } catch (error) {
-        console.error('Error generating speech:', error);
+        logger.error('Error in generateSpeech:', { error: error?.message || error });
         return null;
     }
 }
@@ -118,20 +137,32 @@ async function generateSpeech(text) {
  */
 async function generateFreeTTS(text) {
     try {
-        // Using a free TTS service as fallback
+        logger.info('[generateFreeTTS] Using StreamElements fallback API...');
         const voiceName = 'Brian';
         const url = `https://api.streamelements.com/kappa/v2/speech?voice=${encodeURIComponent(voiceName)}&text=${encodeURIComponent(text)}`;
         
         const response = await fetch(url);
+
+        // Log Response Headers
+        logger.info('[generateFreeTTS] StreamElements Response Headers:', { 
+            status: response.status,
+            contentType: response.headers.get('content-type')
+        });
         
         if (!response.ok) {
-            console.error('Free TTS API error:', await response.text());
+            logger.error('Free TTS API error:', { status: response.status, text: await response.text() });
             return null;
         }
         
-        return Buffer.from(await response.arrayBuffer());
+        const audioBuffer = Buffer.from(await response.arrayBuffer());
+        // Log Buffer Snippet
+        logger.info('[generateFreeTTS] StreamElements Audio Buffer Snippet:', { 
+            length: audioBuffer.length,
+            snippetHex: audioBuffer.slice(0, 16).toString('hex') // First 16 bytes as hex
+        });
+        return audioBuffer;
     } catch (error) {
-        console.error('Error generating free TTS:', error);
+        logger.error('Error generating free TTS:', { error: error?.message || error });
         return null;
     }
 } 
