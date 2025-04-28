@@ -45,16 +45,39 @@ export default {
                 guildId,
                 optionsData: JSON.stringify(interaction.options.data)
             });
+            // === Log full options object ===
+            logger.info('Full interaction.options object:', {
+                guildId,
+                optionsObject: JSON.stringify(interaction.options, null, 2) // Pretty print
+            });
             // ============================
             
-			const newLang = interaction.options.getString('lang');
+            // === Attempt to get value directly ===
+            let newLang = 'en'; // Default
+            try {
+                const langOption = interaction.options.data.find(opt => opt.name === 'lang');
+                if (langOption && typeof langOption.value === 'string') {
+                    newLang = langOption.value;
+                } else {
+                    logger.warn('Could not find string value for lang option directly.', { 
+                        guildId, 
+                        foundOption: JSON.stringify(langOption) 
+                    });
+                    // Fallback to trying getString, though likely to fail
+                    newLang = interaction.options.getString('lang');
+                }
+            } catch (e) {
+                 logger.error('Error accessing options data directly:', { guildId, error: e });
+                 // Fallback to trying getString
+                 newLang = interaction.options.getString('lang');
+            }
+            // ======================================
             
             // === Add detailed logging here ===
             logger.info('Retrieved language option', {
                 guildId,
-                rawOptionValue: newLang, 
-                optionType: typeof newLang,
-                fullOptions: JSON.stringify(interaction.options) // Log all options for context
+                retrievedValue: newLang, 
+                valueType: typeof newLang,
             });
             // ================================
             
