@@ -510,25 +510,31 @@ client.once(Events.ClientReady, async c => {
 		logger.info(`[ClientReady] Ready! Logged in as ${c.user.tag}`);
 		logger.info(`[ClientReady] Serving ${client.guilds.cache.size} guilds on this shard.`);
 		
-		logger.info('[ClientReady] Starting initial guild check...');
-		await checkGuildsForExisting();
-		logger.info('[ClientReady] Guild check completed.');
-		
 		// Send heartbeats/ready signal to shard manager if sharded
 		if (client.shard) {
 			logger.info('[ClientReady] Sending READY signal to shard manager.');
-			client.shard.send({ type: 'READY', id: client.shard.ids[0] });
-			
+			// Send READY signal FIRST
+			client.shard.send({ type: 'READY', id: client.shard.ids[0] }); 
+
 			logger.info('[ClientReady] Setting up heartbeat interval.');
 			setInterval(() => {
 				try {
 					// logger.debug('[Heartbeat] Sending heartbeat...'); // Optional: enable for verbose logs
 					client.shard.send('heartbeat');
 				} catch (error) {
-					logger.error(`[Heartbeat] Failed to send heartbeat:`, { error: error?.message || error });
+					// Add extra check for closed channel before sending heartbeat
+					if (error.code !== 'ERR_IPC_CHANNEL_CLOSED') { 
+						logger.error(`[Heartbeat] Failed to send heartbeat:`, { error: error?.message || error });
+					}
 				}
 			}, HEARTBEAT_INTERVAL); // Use constant
 		}
+
+		// Run guild check AFTER signaling ready
+		logger.info('[ClientReady] Starting initial guild check...');
+		await checkGuildsForExisting();
+		logger.info('[ClientReady] Guild check completed.');
+
 		logger.info('[ClientReady] Handler finished successfully.');
 	} catch (error) {
 		logger.error(`[ClientReady] Error during ready event processing:`, {
@@ -704,10 +710,13 @@ process.on('uncaughtException', error => {
 		
 		// Try to send a message to the shard manager so it knows this was a clean exit
 		if (client.shard) {
-			try {
+			try { // Add try-catch here
 				client.shard.send({ type: 'FATAL_ERROR', error: error.message });
 			} catch (e) {
-				// Ignore errors when trying to send this message
+				// Ignore errors (likely ERR_IPC_CHANNEL_CLOSED) when trying to send this message
+				if (e.code !== 'ERR_IPC_CHANNEL_CLOSED') { 
+					logger.warn('Failed to send FATAL_ERROR to manager during uncaughtException:', e.message);
+				}
 			}
 		}
 		
