@@ -375,7 +375,10 @@ function isFilteredUrl(content) {
 
 // Handle message processing separately for better organization
 async function processMessage(message) {
-	if (!message.guildId || message.author.bot) return;
+	// Ignore DMs, bot messages, and commands
+	if (!message.guildId || message.author.bot || message.content?.startsWith('/')) {
+        return;
+    }
 
 	try {
 		// Track message for analysis
