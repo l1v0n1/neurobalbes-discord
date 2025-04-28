@@ -585,28 +585,29 @@ client.on(Events.InteractionCreate, async interaction => {
             'completed'
         );
     } catch (error) {
+        // Log the error with message and stack
         logger.error(`Error executing command ${interaction.commandName}`, {
-            error,
             commandName: interaction.commandName,
             guildId: interaction.guildId,
-            userId: interaction.user.id
+            userId: interaction.user.id,
+            errorMessage: error?.message, // Log the error message
+            errorStack: error?.stack // Log the full stack trace
         });
         
         try {
+            // Attempt to reply or follow up with an error message
             const errorReply = { 
                 content: 'An error occurred while executing this command.', 
                 ephemeral: true
             };
             
-            if (interaction.replied) {
-                await interaction.followUp(errorReply);
-            } else if (interaction.deferred) {
-                await interaction.editReply(errorReply);
+            // Simplified reply/followUp logic
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorReply).catch(e => logger.error('Error sending followUp error reply', e));
             } else {
-                await interaction.reply(errorReply);
+                await interaction.reply(errorReply).catch(e => logger.error('Error sending initial error reply', e));
             }
             
-            // Log the error response
             logger.command(
                 interaction.commandName, 
                 interaction.guildId,
@@ -614,12 +615,13 @@ client.on(Events.InteractionCreate, async interaction => {
                 'error_response_sent'
             );
         } catch (replyError) {
-            logger.error(`Failed to send error response for ${interaction.commandName}`, {
-                error: replyError,
-                originalError: error,
+            // Log if the overall reply attempt fails (should be less likely now)
+            logger.error(`Failed to send error reply for ${interaction.commandName} (outer catch)`, {
                 commandName: interaction.commandName,
                 guildId: interaction.guildId,
-                userId: interaction.user.id
+                userId: interaction.user.id,
+                replyErrorMessage: replyError?.message, // Log reply error message
+                replyErrorStack: replyError?.stack // Log reply error stack
             });
         }
     }
