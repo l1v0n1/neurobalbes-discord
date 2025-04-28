@@ -87,16 +87,6 @@ install_deps() {
     # Then install other dependencies
     npm install --omit=optional
     
-    # Ask if voice functionality is needed
-    echo -e "${YELLOW}Do you want to install voice functionality? (y/n)${NC}"
-    read -r install_voice
-    if [[ "$install_voice" == "y" || "$install_voice" == "Y" ]]; then
-        echo -e "${GREEN}Installing voice dependencies...${NC}"
-        npm run voice:install
-    else
-        echo -e "${YELLOW}Voice functionality will be disabled.${NC}"
-    fi
-    
     # Run installation check
     echo -e "${GREEN}Checking installation...${NC}"
     node install-test.js
