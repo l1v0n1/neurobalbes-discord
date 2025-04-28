@@ -47,8 +47,15 @@ export default {
 			// Update language in database
 			await updateLanguage(guildId, newLang);
 			
-			// Get the localized language name for the chosen language
-			const languageName = answers.language.translate[newLang];
+			// Get the localized language name for the chosen language with fallback
+			const languageName = answers.language.translate[newLang] || getLanguageDisplayName(newLang);
+			
+			// Log the language change
+			logger.info(`Language changed for guild ${guildId}`, {
+				oldLanguage: currentLang,
+				newLanguage: newLang,
+				languageName
+			});
 			
 			// Send confirmation message in the selected language, replacing %VAR% with the language name
 			let responseMessage = answers.language.changed[newLang] || answers.language.changed.en;
@@ -76,3 +83,15 @@ export default {
 		}
 	}
 };
+
+// Helper function to get a display name for a language code
+function getLanguageDisplayName(langCode) {
+	const displayNames = {
+		'en': 'English',
+		'ru': 'Русский',
+		'uk': 'Українська',
+		'tr': 'Türkçe'
+	};
+	
+	return displayNames[langCode] || langCode;
+}
