@@ -1,7 +1,7 @@
 import { createAudioPlayer, createAudioResource, joinVoiceChannel, getVoiceConnection, AudioPlayerStatus } from '@discordjs/voice';
 import fetch from 'node-fetch';
 import { Readable } from 'node:stream';
-import logger from '../utils/logger';
+import logger from '../utils/logger.js';
 
 // Voice API configuration
 const API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
