@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getLanguage, updateLanguage } from '../src/database/methods.js';
+import logger from '../src/utils/logger.js';
 
 export default {
 	data: new SlashCommandBuilder()
@@ -20,8 +21,7 @@ export default {
 	ephemeral: true,
 	async execute(interaction) {
 		try {
-			// Defer the reply immediately to prevent timeouts
-			await interaction.deferReply({ ephemeral: true });
+			// Don't defer here - bot.js already handles deferring
 			
 			if (!interaction.guild) {
 				return interaction.editReply({ 
@@ -59,7 +59,12 @@ export default {
 				content: responseMessage
 			});
 		} catch (error) {
-			console.error('Error in language command:', error);
+			logger.error('Error in language command', {
+				error,
+				guildId: interaction.guild?.id,
+				userId: interaction.user.id
+			});
+			
 			const errorMessage = answers.common?.database_error?.en || 'An error occurred. Please try again later.';
 			
 			// Make sure we handle this even if the interaction hasn't been deferred
