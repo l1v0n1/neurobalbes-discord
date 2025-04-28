@@ -40,7 +40,7 @@ const manager = new ShardingManager(botPath, {
     token: token, // Pass the token
     totalShards: config.totalShards, // Use 'auto' or the value from config
     respawn: true, // Automatically respawn shards that die
-    execArgv: ['--max-old-space-size=8192'] // Pass 8GB memory limit and trace flag to shards
+    execArgv: ['--max-old-space-size=12288'] // Pass 12GB memory limit to shards
     // Add other ShardingManager options here if needed, e.g.:
     // shardArgs: ['--some-node-flag'],
 });
