@@ -39,6 +39,14 @@ export default {
 			}
 
 			const guildId = interaction.guild.id;
+            
+            // === Log raw options data ===
+            logger.info('Raw interaction options data:', {
+                guildId,
+                optionsData: JSON.stringify(interaction.options.data)
+            });
+            // ============================
+            
 			const newLang = interaction.options.getString('lang');
             
             // === Add detailed logging here ===
@@ -51,10 +59,13 @@ export default {
             // ================================
             
             // Validate language value
-            if (!newLang || !SUPPORTED_LANGUAGES.includes(newLang)) {
+            // === Add type check ===
+            if (typeof newLang !== 'string' || !SUPPORTED_LANGUAGES.includes(newLang)) {
+            // ======================
                 logger.error(`Invalid language selection`, {
                     guildId,
-                    attemptedLang: newLang,
+                    attemptedLang: typeof newLang === 'string' ? newLang : JSON.stringify(newLang), // Log safely
+                    optionType: typeof newLang,
                     supportedLanguages: SUPPORTED_LANGUAGES
                 });
                 return interaction.editReply({
