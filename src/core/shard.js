@@ -416,17 +416,45 @@ async function startSharding() {
     try {
         console.log('Starting sharding process...');
         
-        // Calculate optimal memory limit if not specified
-        let nodeArgs = config.shardArgs || [];
-        if (!nodeArgs.some(arg => arg.includes('--max-old-space-size'))) {
-            const memoryLimitArg = calculateMemoryLimit(await calculateShardCount());
-            nodeArgs.push(memoryLimitArg);
+        const shardCount = await calculateShardCount(); // Get count first
+        console.log(`Calculated shard count: ${shardCount}`);
+
+        // Determine Node.js arguments
+        let nodeArgs = [];
+        const memoryArg = '--max-old-space-size';
+        let memoryLimitMB = 4096; // Default desired memory
+
+        // Check if memory is set in config.shardArgs
+        const configMemoryArg = config.shardArgs?.find(arg => arg.startsWith(memoryArg));
+
+        if (configMemoryArg) {
+            console.log(`Using memory limit from config.json: ${configMemoryArg}`);
+            nodeArgs = [...config.shardArgs]; // Use all args from config
+            // Extract the value for potential calculation use later if needed
+            const valueMatch = configMemoryArg.match(/=(\d+)/);
+            if (valueMatch && valueMatch[1]) {
+                 memoryLimitMB = parseInt(valueMatch[1], 10);
+            }
+        } else {
+            // If not in config, calculate it
+            const calculatedMemoryArg = calculateMemoryLimit(shardCount); 
+            console.log(`Calculated memory limit argument: ${calculatedMemoryArg}`);
+            nodeArgs.push(calculatedMemoryArg);
+             // Add any other default args from config *not* related to memory
+            if (config.shardArgs) {
+                nodeArgs.push(...config.shardArgs.filter(arg => !arg.startsWith(memoryArg)));
+            }
+            // Extract the value for logging
+             const valueMatch = calculatedMemoryArg.match(/=(\d+)/);
+            if (valueMatch && valueMatch[1]) {
+                 memoryLimitMB = parseInt(valueMatch[1], 10);
+            }
         }
-        
-        // Calculate shard count
-        const shardCount = await calculateShardCount();
-        console.log(`Starting bot with ${shardCount} shard(s)...`);
-        console.log(`Using Node.js args: ${nodeArgs.join(' ')}`);
+
+        // Ensure args are unique in case of overlaps
+        nodeArgs = [...new Set(nodeArgs)];
+
+        console.log(`Final Node.js args to be used for shards: ${nodeArgs.join(' ')}`); // Log the final arguments
 
         // Get absolute path to bot.js
         const botPath = path.join(__dirname, 'bot.js');
@@ -437,7 +465,7 @@ async function startSharding() {
             totalShards: shardCount,
             respawn: false, // Disable automatic respawn by discord.js, we handle it manually
             timeout: 300000, // 5 minutes
-            execArgv: nodeArgs
+            execArgv: nodeArgs // Pass the final calculated/configured args
         });
 
         // Add rate limit protection
@@ -470,7 +498,6 @@ async function startSharding() {
         setupShutdownHandlers(manager);
 
     } catch (error) {
-        // Catch errors during the initial manager setup and spawn
         console.error('[CRITICAL] Failed to start sharding manager or spawn initial shards:', error);
         process.exit(1); // Exit if manager cannot start
     }
