@@ -155,6 +155,60 @@ const answers = {
             "en": "Show this message",
             "uk": "Показати це повідомлення",
             "tr": "Bu mesajı göster"
+        },
+        "continue": {
+            "ru": "Продолжить последнюю генерацию",
+            "en": "Continue the last generation",
+            "uk": "Продовжити останню генерацію",
+            "tr": "Son oluşturmaya devam et"
+        },
+        "delete": {
+            "ru": "Удалить сообщение из базы данных",
+            "en": "Delete a message from the database",
+            "uk": "Видалити повідомлення з бази даних",
+            "tr": "Veritabanından bir mesajı sil"
+        },
+        "gen": {
+            "ru": "Сгенерировать текст по заданному запросу",
+            "en": "Generate text based on a given prompt",
+            "uk": "Згенерувати текст за заданим запитом",
+            "tr": "Belirli bir istem üzerine metin oluştur"
+        },
+        "gendem": {
+            "ru": "Сгенерировать демотиватор с текстом",
+            "en": "Generate a demotivator with text",
+            "uk": "Згенерувати демотиватор з текстом",
+            "tr": "Metinli bir demotivatör oluştur"
+        },
+        "info": {
+            "ru": "Показать информацию о боте и сервере",
+            "en": "Show information about the bot and server",
+            "uk": "Показати інформацію про бота та сервер",
+            "tr": "Bot ve sunucu hakkında bilgi göster"
+        },
+        "setting": {
+            "ru": "Изменить настройки бота",
+            "en": "Change bot settings",
+            "uk": "Змінити налаштування бота",
+            "tr": "Bot ayarlarını değiştir"
+        },
+        "shards": {
+            "ru": "Показать информацию о шардах бота",
+            "en": "Show information about bot shards",
+            "uk": "Показати інформацію про шарди бота",
+            "tr": "Bot parçaları hakkında bilgi göster"
+        },
+        "stats": {
+            "ru": "Показать статистику бота",
+            "en": "Show bot statistics",
+            "uk": "Показати статистику бота",
+            "tr": "Bot istatistiklerini göster"
+        },
+        "status": {
+            "ru": "Показать текущий статус и настройки бота",
+            "en": "Show current bot status and settings",
+            "uk": "Показати поточний статус та налаштування бота",
+            "tr": "Mevcut bot durumunu ve ayarlarını göster"
         }
     },
     "common": {

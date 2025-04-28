@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { answers } from '../assets/answers.js';
 import { getServerLanguage, getLocalizedString } from '../src/utils/language.js';
+import logger from '../src/utils/logger.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -23,6 +24,9 @@ export default {
     
     async execute(interaction) {
         try {
+            // Defer reply immediately
+            await interaction.deferReply({ ephemeral: true });
+            
             const guildId = interaction.guild?.id;
             
             // Get language from option or use guild default
@@ -34,7 +38,7 @@ export default {
             
             if (!commands.size) {
                 const noCommandsMessage = await getLocalizedString(answers, 'help', 'no_commands', lang);
-                return interaction.reply({ content: noCommandsMessage, ephemeral: true });
+                return interaction.editReply({ content: noCommandsMessage });
             }
             
             const title = await getLocalizedString(answers, 'help', 'title', lang);
@@ -69,19 +73,16 @@ export default {
             
             helpEmbed.setFooter({ text: 'NeuroBalbes' });
             
-            // Handle both deferred and direct responses
-            if (interaction.deferred) {
-                return interaction.editReply({
-                    embeds: [helpEmbed]
-                });
-            } else {
-                return interaction.reply({
-                    embeds: [helpEmbed],
-                    ephemeral: true
-                });
-            }
+            // Since we've already deferred the reply, just edit it
+            return interaction.editReply({
+                embeds: [helpEmbed]
+            });
         } catch (error) {
-            console.error('Error in help command:', error);
+            logger.error('Error in help command', { 
+                error,
+                guildId: interaction.guild?.id,
+                userId: interaction.user.id
+            });
             
             if (interaction.deferred) {
                 return interaction.editReply({ 

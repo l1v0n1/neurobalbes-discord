@@ -2,41 +2,16 @@ import { Client, Events, GatewayIntentBits, Collection, ChannelType, Permissions
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
-import winston from 'winston';
 import { fileURLToPath } from 'url';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Setup logging
-const logger = winston.createLogger({
-	level: process.env.LOG_LEVEL || 'info',
-	format: winston.format.combine(
-		winston.format.timestamp(),
-		winston.format.printf(({ level, message, timestamp }) => {
-			return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-		})
-	),
-	transports: [
-		new winston.transports.Console(),
-		new winston.transports.File({ 
-			filename: path.join('logs', 'bot-error.log'), 
-			level: 'error' 
-		}),
-		new winston.transports.File({ 
-			filename: path.join('logs', 'bot-combined.log')
-		})
-	],
-	levels: {
-		error: 0,
-		warn: 1,
-		info: 2,
-		debug: 3
-	}
-});
-
-// Setup shard info (ensure logs show correct shard)
-let shardInfo = process.env.SHARD_ID ? `[Shard ${process.env.SHARD_ID}]` : '';
+// Set shard ID for logger
+if (process.env.SHARD_ID) {
+	logger.setShardId(process.env.SHARD_ID);
+}
 
 // Constants
 const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/;
@@ -56,9 +31,9 @@ let config = {
 try {
 	const userConfig = await import('../../config.json', { with: { type: 'json' } });
 	config = { ...config, ...userConfig.default };
-	logger.info(`${shardInfo} Configuration loaded from config.json`);
+	logger.info(`Configuration loaded from config.json`);
 } catch (error) {
-	logger.warn(`${shardInfo} Could not load config.json, using defaults and environment variables: ${error.message}`);
+	logger.warn(`Could not load config.json, using defaults and environment variables: ${error.message}`);
 }
 
 // Dynamic imports for ES modules
@@ -85,13 +60,13 @@ class ConnectionManager {
 
 	async handleDisconnect(client, error) {
 		if (error) {
-			logger.error(`${shardInfo} Disconnected with error: ${error.message}`);
+			logger.error(`Disconnected with error: ${error.message}`);
 		} else {
-			logger.warn(`${shardInfo} Disconnected without error`);
+			logger.warn(`Disconnected without error`);
 		}
 
 		if (this.reconnecting) {
-			logger.info(`${shardInfo} Already attempting to reconnect...`);
+			logger.info(`Already attempting to reconnect...`);
 			return;
 		}
 
@@ -104,31 +79,31 @@ class ConnectionManager {
 			
 			this.reconnectAttempt++;
 			
-			logger.info(`${shardInfo} Attempting to reconnect (${this.reconnectAttempt}/${this.maxReconnectAttempts}) in ${Math.floor(delay/1000)} seconds...`);
+			logger.info(`Attempting to reconnect (${this.reconnectAttempt}/${this.maxReconnectAttempts}) in ${Math.floor(delay/1000)} seconds...`);
 			
 			setTimeout(() => {
-				logger.info(`${shardInfo} Reconnecting now...`);
+				logger.info(`Reconnecting now...`);
 				
 				client.login(config.token)
 					.then(() => {
-						logger.info(`${shardInfo} Reconnected successfully`);
+						logger.info(`Reconnected successfully`);
 						this.reconnecting = false;
 					})
 					.catch(err => {
-						logger.error(`${shardInfo} Failed to reconnect: ${err.message}`);
+						logger.error(`Failed to reconnect: ${err.message}`);
 						this.reconnecting = false;
 						this.handleDisconnect(client, err);
 					});
 			}, delay);
 		} else {
-			logger.error(`${shardInfo} Maximum reconnection attempts reached (${this.maxReconnectAttempts}). Giving up.`);
+			logger.error(`Maximum reconnection attempts reached (${this.maxReconnectAttempts}). Giving up.`);
 			process.exit(1); // Exit for shard manager to restart this shard
 		}
 	}
 
 	resetReconnectCounter() {
 		if (this.reconnectAttempt > 0) {
-			logger.info(`${shardInfo} Connection stable, resetting reconnect counter from ${this.reconnectAttempt} to 0`);
+			logger.info(`Connection stable, resetting reconnect counter from ${this.reconnectAttempt} to 0`);
 		}
 		this.reconnectAttempt = 0;
 	}
@@ -212,7 +187,7 @@ class MemoryManager {
 			return;
 		}
 		
-		logger.info(`${shardInfo} Running cache cleanup...`);
+		logger.info(`Running cache cleanup...`);
 		
 		this.messageCache.forEach((guildCache, guildId) => {
 			guildCache.forEach((channelMessages, channelId) => {
@@ -243,7 +218,7 @@ class MemoryManager {
 		this.lastCleanup = now;
 		this.cacheSize -= deletedCount;
 		
-		logger.info(`${shardInfo} Cache cleanup complete. Removed ${deletedCount} messages, current size: ${this.cacheSize} entries`);
+		logger.info(`Cache cleanup complete. Removed ${deletedCount} messages, current size: ${this.cacheSize} entries`);
 	}
 
 	getCacheStats() {
@@ -312,67 +287,67 @@ async function loadCommands() {
 		const commandFiles = await fs.readdir(commandsPath);
 		const jsFiles = commandFiles.filter(file => file.endsWith('.js'));
 		
-		logger.info(`${shardInfo} Found ${jsFiles.length} command files`);
+		logger.info(`Found ${jsFiles.length} command files`);
 		
 		for (const file of jsFiles) {
 			try {
 				const filePath = path.join(commandsPath, file);
-				logger.info(`${shardInfo} Loading command file: ${filePath}`);
+				logger.info(`Loading command file: ${filePath}`);
 				
 				try {
 					const command = await import(filePath);
 					
 					// Debug what's in the command module
-					logger.info(`${shardInfo} Command module properties: ${Object.keys(command).join(', ')}`);
-					logger.info(`${shardInfo} Command default export keys: ${command.default ? Object.keys(command.default).join(', ') : 'No default export'}`);
+					logger.info(`Command module properties: ${Object.keys(command).join(', ')}`);
+					logger.info(`Command default export keys: ${command.default ? Object.keys(command.default).join(', ') : 'No default export'}`);
 					
 					// Check if command is in the default export
 					if (command.default && 'data' in command.default && 'execute' in command.default) {
 						client.commands.set(command.default.data.name, command.default);
-						logger.info(`${shardInfo} Loaded command: ${command.default.data.name}`);
+						logger.info(`Loaded command: ${command.default.data.name}`);
 					} else if ('data' in command && 'execute' in command) {
 						client.commands.set(command.data.name, command);
-						logger.info(`${shardInfo} Loaded command: ${command.data.name}`);
+						logger.info(`Loaded command: ${command.data.name}`);
 					} else {
-						logger.warn(`${shardInfo} [WARNING] The command at ${filePath} is missing required "data" or "execute" property.`);
+						logger.warn(`[WARNING] The command at ${filePath} is missing required "data" or "execute" property.`);
 					}
 				} catch (importError) {
-					logger.error(`${shardInfo} Import error for ${filePath}: ${importError.message}`);
+					logger.error(`Import error for ${filePath}: ${importError.message}`);
 					if (importError.stack) {
-						logger.error(`${shardInfo} Stack trace: ${importError.stack}`);
+						logger.error(`Stack trace: ${importError.stack}`);
 					}
 				}
 			} catch (error) {
-				logger.error(`${shardInfo} Error loading command file: ${file}`, error);
+				logger.error(`Error loading command file: ${file}`, error);
 			}
 		}
 		
-		logger.info(`${shardInfo} Successfully loaded ${client.commands.size} commands`);
+		logger.info(`Successfully loaded ${client.commands.size} commands`);
 	} catch (error) {
-		logger.error(`${shardInfo} Error loading commands directory:`, error);
+		logger.error(`Error loading commands directory:`, error);
 		process.exit(1);
 	}
 }
 
 // Check if guilds exist in database and add if missing
 async function checkGuildsForExisting() {
-	logger.info(`${shardInfo} [GUILD EXISTING] start...`);
+	logger.info(`[GUILD EXISTING] start...`);
 	try {
 		const guilds = await client.guilds.fetch();
-		logger.info(`${shardInfo} Checking ${guilds.size} guilds...`);
+		logger.info(`Checking ${guilds.size} guilds...`);
 		
 		let added = 0;
 		for (const guild of guilds.values()) {
 			if (!(await chatExists(guild.id))) {
 				await insert(guild.id);
-				logger.info(`${shardInfo} [ADDED] ${guild.id} (${guild.name})`);
+				logger.info(`[ADDED] ${guild.id} (${guild.name})`);
 				added++;
 			}
 		}
 		
-		logger.info(`${shardInfo} [GUILD EXISTING] complete. Added ${added} new guilds.`);
+		logger.info(`[GUILD EXISTING] complete. Added ${added} new guilds.`);
 	} catch (error) {
-		logger.error(`${shardInfo} [GUILD EXISTING] Error checking guilds:`, error);
+		logger.error(`[GUILD EXISTING] Error checking guilds:`, error);
 	}
 }
 
@@ -454,7 +429,7 @@ async function processMessage(message) {
 			await generateAndSendReply(message.channelId, textbase, chat.gen);
 		}
 	} catch (error) {
-		logger.error(`${shardInfo} Error processing message in guild ${message.guildId}:`, error);
+		logger.error(`Error processing message in guild ${message.guildId}:`, error);
 	}
 }
 
@@ -473,7 +448,7 @@ async function generateAndSendReply(channelId, textbase, genType) {
 		
 		const channel = client.channels.cache.get(channelId);
 		if (!channel) {
-			logger.warn(`${shardInfo} Channel ${channelId} not found for sending message`);
+			logger.warn(`Channel ${channelId} not found for sending message`);
 			return;
 		}
 		
@@ -497,36 +472,36 @@ async function generateAndSendReply(channelId, textbase, genType) {
 						content: text,
 						files: [{ attachment: link }]
 					}).catch(err => {
-						logger.warn(`${shardInfo} Failed to send message with attachment to ${channelId}:`, err.message);
+						logger.warn(`Failed to send message with attachment to ${channelId}:`, err.message);
 					});
 				} else {
-					logger.debug(`${shardInfo} Invalid attachment URL in generated text: ${link} (Status: ${response.status})`);
+					logger.debug(`Invalid attachment URL in generated text: ${link} (Status: ${response.status})`);
 					// Send text without the invalid attachment
 					await channel.send(text || correctedText).catch(err => {
-						logger.warn(`${shardInfo} Failed to send text-only message to ${channelId}:`, err.message);
+						logger.warn(`Failed to send text-only message to ${channelId}:`, err.message);
 					});
 				}
 			} catch (err) {
-				logger.error(`${shardInfo} Error validating attachment URL: ${link}`, err.message);
+				logger.error(`Error validating attachment URL: ${link}`, err.message);
 				// Fallback to just sending the text
 				await channel.send(text || correctedText).catch(() => {});
 			}
 		} else {
 			// Simple text reply
 			await channel.send(correctedText).catch(err => {
-				logger.warn(`${shardInfo} Failed to send message to ${channelId}:`, err.message);
+				logger.warn(`Failed to send message to ${channelId}:`, err.message);
 			});
 		}
 	} catch (error) {
-		logger.error(`${shardInfo} Error generating/sending reply to channel ${channelId}:`, error);
+		logger.error(`Error generating/sending reply to channel ${channelId}:`, error);
 	}
 }
 
 // Set up event handlers
 client.once(Events.ClientReady, async c => {
 	try {
-		logger.info(`${shardInfo} Ready! Logged in as ${c.user.tag}`);
-		logger.info(`${shardInfo} Serving ${client.guilds.cache.size} guilds`);
+		logger.info(`Ready! Logged in as ${c.user.tag}`);
+		logger.info(`Serving ${client.guilds.cache.size} guilds`);
 		
 		// Initialize and check guilds
 		await checkGuildsForExisting();
@@ -541,12 +516,12 @@ client.once(Events.ClientReady, async c => {
 				try {
 					client.shard.send('heartbeat');
 				} catch (error) {
-					logger.error(`${shardInfo} Failed to send heartbeat:`, error);
+					logger.error(`Failed to send heartbeat:`, error);
 				}
 			}, 30000);
 		}
 	} catch (error) {
-		logger.error(`${shardInfo} Error in ready event:`, error);
+		logger.error(`Error in ready event:`, error);
 	}
 });
 
@@ -555,7 +530,11 @@ client.on(Events.InteractionCreate, async interaction => {
 
 	const command = client.commands.get(interaction.commandName);
 	if (!command) {
-		logger.error(`${shardInfo} No command matching ${interaction.commandName} was found.`);
+		logger.error(`No command matching ${interaction.commandName} was found.`, {
+			commandName: interaction.commandName,
+			guildId: interaction.guildId,
+			userId: interaction.user.id
+		});
 		try {
 			// Only reply if the interaction hasn't been replied to yet
 			if (!interaction.replied && !interaction.deferred) {
@@ -565,12 +544,20 @@ client.on(Events.InteractionCreate, async interaction => {
 				});
 			}
 		} catch (error) {
-			logger.error(`${shardInfo} Failed to reply to unknown command ${interaction.commandName}:`, error);
+			logger.error(`Failed to reply to unknown command ${interaction.commandName}`, error);
 		}
 		return;
 	}
 
 	try {
+		// Log command usage
+		logger.command(
+			interaction.commandName, 
+			interaction.guildId, 
+			interaction.user.id, 
+			'started'
+		);
+		
 		// Only defer if the command doesn't explicitly disable it AND the interaction hasn't been handled yet
 		if (command.deferReply !== false && !interaction.replied && !interaction.deferred) {
 			await interaction.deferReply({
@@ -579,8 +566,21 @@ client.on(Events.InteractionCreate, async interaction => {
 		}
 		
 		await command.execute(interaction);
+		
+		// Log successful execution
+		logger.command(
+			interaction.commandName, 
+			interaction.guildId,
+			interaction.user.id, 
+			'completed'
+		);
 	} catch (error) {
-		logger.error(`${shardInfo} Error executing command ${interaction.commandName}:`, error);
+		logger.error(`Error executing command ${interaction.commandName}`, {
+			error,
+			commandName: interaction.commandName,
+			guildId: interaction.guildId,
+			userId: interaction.user.id
+		});
 		
 		try {
 			const errorReply = { 
@@ -595,15 +595,28 @@ client.on(Events.InteractionCreate, async interaction => {
 			} else {
 				await interaction.reply(errorReply);
 			}
+			
+			// Log the error response
+			logger.command(
+				interaction.commandName, 
+				interaction.guildId,
+				interaction.user.id, 
+				'error_response_sent'
+			);
 		} catch (replyError) {
-			// Just log the error, no need for detailed message
-			logger.error(`${shardInfo} Failed to send error response for ${interaction.commandName}`);
+			logger.error(`Failed to send error response for ${interaction.commandName}`, {
+				error: replyError,
+				originalError: error,
+				commandName: interaction.commandName,
+				guildId: interaction.guildId,
+				userId: interaction.user.id
+			});
 		}
 	}
 });
 
 client.on(Events.GuildCreate, async guild => {
-	logger.info(`${shardInfo} Bot added to new guild: ${guild.name} (${guild.id})`);
+	logger.info(`Bot added to new guild: ${guild.name} (${guild.id})`);
 	
 	try {
 		await insert(guild.id);
@@ -617,10 +630,10 @@ client.on(Events.GuildCreate, async guild => {
 		if (channel) {
 			await channel.send({
 				content: `Hi **${guild.name}**!\nThanks for inviting me, I'm **Neurobalbes** and I remember your messages to generate my own.\n\nFor my commands, type \`/help\`\nTo change the bot language, type \`/language\``
-			}).catch(err => logger.warn(`${shardInfo} Could not send welcome message:`, err.message));
+			}).catch(err => logger.warn(`Could not send welcome message:`, err.message));
 		}
 	} catch (error) {
-		logger.error(`${shardInfo} Error initializing data for new guild ${guild.id}:`, error);
+		logger.error(`Error initializing data for new guild ${guild.id}:`, error);
 		
 		const channel = guild.channels.cache.find(channel =>
 			channel.type === ChannelType.GuildText && 
@@ -640,28 +653,28 @@ client.on(Events.MessageCreate, processMessage);
 
 // Improved error handling
 client.on(Events.Error, error => {
-	logger.error(`${shardInfo} Client error:`, error);
+	logger.error(`Client error:`, error);
 	connectionManager.handleDisconnect(client, error);
 });
 
 client.on(Events.ShardDisconnect, (closeEvent, shardId) => {
-	logger.warn(`${shardInfo} Shard ${shardId} disconnected with code ${closeEvent.code}:`, closeEvent.reason);
+	logger.warn(`Shard ${shardId} disconnected with code ${closeEvent.code}:`, closeEvent.reason);
 	connectionManager.handleDisconnect(client, new Error(`Shard ${shardId} disconnected: ${closeEvent.reason}`));
 });
 
 client.on(Events.ShardError, (error, shardId) => {
-	logger.error(`${shardInfo} Shard ${shardId} error:`, error);
+	logger.error(`Shard ${shardId} error:`, error);
 	// Don't disconnect for shard errors, they might be transient
 });
 
 // Handle uncaught exceptions more gracefully
 process.on('uncaughtException', error => {
-	logger.error(`${shardInfo} Uncaught exception:`, error);
+	logger.error(`Uncaught exception:`, error);
 	// Don't exit for all uncaught exceptions, only critical ones
 	if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-		logger.info(`${shardInfo} Recovered error, continuing execution...`);
+		logger.info(`Recovered error, continuing execution...`);
 	} else {
-		logger.error(`${shardInfo} Critical error, exiting in 5 seconds...`);
+		logger.error(`Critical error, exiting in 5 seconds...`);
 		
 		// Try to send a message to the shard manager so it knows this was a clean exit
 		if (client.shard) {
@@ -678,8 +691,8 @@ process.on('uncaughtException', error => {
 
 // Log warning/debug messages in non-production environments
 if (process.env.NODE_ENV !== 'production') {
-	client.on(Events.Debug, info => logger.debug(`${shardInfo} [DEBUG] ${info}`));
-	client.on(Events.Warn, info => logger.warn(`${shardInfo} [WARN] ${info}`));
+	client.on(Events.Debug, info => logger.debug(`[DEBUG] ${info}`));
+	client.on(Events.Warn, info => logger.warn(`[WARN] ${info}`));
 }
 
 // Start everything
@@ -687,7 +700,7 @@ async function main() {
 	try {
 		// Set up process-wide exception handling for promises
 		process.on('unhandledRejection', (error) => {
-			logger.error(`${shardInfo} Unhandled promise rejection:`, error);
+			logger.error(`Unhandled promise rejection:`, error);
 			// Don't crash for promise rejections, they're usually non-fatal
 		});
 		
@@ -696,29 +709,29 @@ async function main() {
 		
 		// Validate token before attempting login
 		if (!config.token || config.token === 'YOUR_TOKEN_HERE') {
-			logger.error(`${shardInfo} Invalid bot token configuration. Check your config.json or environment variables.`);
+			logger.error(`Invalid bot token configuration. Check your config.json or environment variables.`);
 			process.exit(1);
 		}
 		
 		// Then login with better error handling
-		logger.info(`${shardInfo} Attempting to log in to Discord...`);
+		logger.info(`Attempting to log in to Discord...`);
 		await client.login(config.token).catch(error => {
-			logger.error(`${shardInfo} Login error: ${error.message}`);
+			logger.error(`Login error: ${error.message}`);
 			
 			if (error.code === 'TOKEN_INVALID') {
-				logger.error(`${shardInfo} The provided token is invalid. Check your configuration.`);
+				logger.error(`The provided token is invalid. Check your configuration.`);
 			} else if (error.code === 'DISALLOWED_INTENTS') {
-				logger.error(`${shardInfo} The bot is trying to use intents that aren't enabled in the Discord Developer Portal.`);
+				logger.error(`The bot is trying to use intents that aren't enabled in the Discord Developer Portal.`);
 			}
 			
 			throw error;
 		});
 		
-		logger.info(`${shardInfo} Successfully logged in and connected to Discord!`);
+		logger.info(`Successfully logged in and connected to Discord!`);
 		
 		// Set a timeout to exit if the ready event never fires
 		const readyTimeout = setTimeout(() => {
-			logger.error(`${shardInfo} Client did not become ready within timeout period. Exiting.`);
+			logger.error(`Client did not become ready within timeout period. Exiting.`);
 			process.exit(1);
 		}, 240000); // 4 minutes
 		
@@ -727,7 +740,7 @@ async function main() {
 			clearTimeout(readyTimeout);
 		});
 	} catch (error) {
-		logger.error(`${shardInfo} Failed to initialize bot:`, error);
+		logger.error(`Failed to initialize bot:`, error);
 		process.exit(1);
 	}
 }
