@@ -24,4 +24,4 @@ RUN touch /app/data/data.db
 RUN ln -s /app/data/data.db /app/data.db
 
 # Define default command to run the application
-CMD ["npm", "start"]
+CMD ["sh", "-c", "node deploy-commands.js && npm start"]
