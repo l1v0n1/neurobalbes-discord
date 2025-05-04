@@ -27,13 +27,8 @@ let config = {
 	prefix: process.env.PREFIX || '/',
 	bot_description: process.env.BOT_DESCRIPTION || 'Neurobalbes | Type /help for commands',
 	clientId: process.env.CLIENT_ID,
-	raw_limit: parseInt(process.env.RAW_LIMIT || '2000', 10),
-	inviteLink: process.env.INVITE_LINK || 'https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=8',
-	serverLink: process.env.SERVER_LINK || 'https://discord.gg/yourserverlink',
-	adminId: process.env.ADMIN_ID || '123456789',
-	site: process.env.SITE || 'https://google.com'
+	raw_limit: parseInt(process.env.RAW_LIMIT || '2000', 10)
 };
-
 try {
 	const userConfig = await import('../../config.json', { with: { type: 'json' } });
 	config = { ...config, ...userConfig.default };
