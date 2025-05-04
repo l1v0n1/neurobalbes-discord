@@ -1,0 +1,8 @@
+# Exclude configuration files
+config.json
+
+# Exclude the database file
+data.db
+
+# Exclude all hidden files (.git, .env, etc.)
+.*
