@@ -4,7 +4,8 @@ services:
     image: kuperdot/neurobalbes-discord:latest
     container_name: neurobalbes-bot
     volumes:
-      - balbes-data:/app/data.db
+      - type: bind
+      - balbes-data:/app/data
     environment:
       BOT_TOKEN: your-bot-token
       PREFIX: /

@@ -13,8 +13,15 @@ RUN npm install --omit=optional
 # Copy the rest of the application code
 COPY . .
 
+# Create a directory for the database file
+# Workaround for the volume mount, as docker only allows mounting directories, not files
+RUN mkdir -p /app/data
+
 # Create an empty data.db file
-RUN touch data.db
+RUN touch /app/data/data.db
+
+# Create a symbolic link to the data.db file in the app directory
+RUN ln -s /app/data/data.db /app/data.db
 
 # Define default command to run the application
 CMD ["npm", "start"]
