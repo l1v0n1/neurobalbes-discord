@@ -87,7 +87,7 @@ Use the provided docker compose file to deploy the bot using the docker GUI of y
       image: kuperdot/neurobalbes-discord:latest
       container_name: neurobalbes-bot
       volumes:
-         - balbes-data:/app/data.db
+         - balbes-data:/app/data
       environment:
          BOT_TOKEN: your-bot-token
          PREFIX: /
@@ -137,7 +137,7 @@ Use the provided docker compose file to deploy the bot using the docker GUI of y
    ```bash
    docker run -d \
    --name neurobalbes-bot \
-   -v balbes-data:/app/data.db \
+   -v balbes-data:/app/data \
    -e BOT_TOKEN=your-bot-token \
    -e PREFIX=/ \
    -e BOT_DESCRIPTION='Neurobalbes | Type /help for commands' \
