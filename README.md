@@ -2,7 +2,7 @@
 
 An advanced Discord bot using Markov chains for message generation.
 
-## Setup
+## Setup to run directly on the OS
 
 1. Clone the repository:
    ```
@@ -52,7 +52,7 @@ For development:
    npm run dev
    ```
 
-## Quick Start with Deployment Script
+### Quick Start with Deployment Script
 
 You can also use the provided deployment script which will guide you through the setup process:
 
@@ -68,6 +68,88 @@ The script will:
 4. Verify the installation
 5. Start the bot with your preferred method (normal or PM2)
 
+## Docker setup 
+
+> :information_source: The image is not supplied by the original developer. If you encounter any issues with it, address them to https://github.com/kuper-dot/neurobalbes-discord. 
+>
+> The docker image does not support voice functionality (yet)
+
+### Method 1: Using unofficial image (Easiest)
+
+Use the provided docker compose file to deploy the bot using the docker GUI of your choice
+
+> :warning: Don't forget to change the environmental variables!
+
+   ```yml
+   version: '3.8'
+   services:
+   neurobalbes-bot:
+      image: kuperdot/neurobalbes-discord:latest
+      container_name: neurobalbes-bot
+      volumes:
+         - balbes-data:/app/data
+      environment:
+         BOT_TOKEN: your-bot-token
+         PREFIX: /
+         BOT_DESCRIPTION: 'Neurobalbes | Type /help for commands'
+         CLIENT_ID: your-bot-client-id
+         RAW_LIMIT: 2000
+         INVITE_LINK: your-invite-link
+         SERVER_LINK: your-server-link
+         ADMIN_ID: 123456789 # Replace with your discord user ID
+         SITE: https://www.youtube.com/watch?v=dQw4w9WgXcQ # Replace with your site URL
+      command: ["npm", "start"]
+
+   volumes:
+   balbes-data:
+   ```
+
+
+**If you don't use the GUI you can:**
+
+1. Download docker-compose.yml
+   ```bash
+   wget https://raw.githubusercontent.com/l1v0n1/neurobalbes-discord/main/docker-compose.yml
+   ```
+
+2. Modify the file to include proper varibles
+
+3. Run:
+   ```bash
+   docker-compose up -d
+   ```
+
+
+### Method 2: Build the image manually
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/l1v0n1/neurobalbes-discord.git
+   cd neurobalbes-discord
+   ```
+
+2. Build the image using provided dockerfile
+   ```bash
+   docker build -t neurobalbes-discord .
+   ```
+
+3. Use the following command to deploy the image
+   ```bash
+   docker run -d \
+   --name neurobalbes-bot \
+   -v balbes-data:/app/data \
+   -e BOT_TOKEN=your-bot-token \
+   -e PREFIX=/ \
+   -e BOT_DESCRIPTION='Neurobalbes | Type /help for commands' \
+   -e CLIENT_ID=your-bot-client-id \
+   -e RAW_LIMIT=2000 \
+   -e INVITE_LINK=your-invite-link \
+   -e SERVER_LINK=your-server-link \
+   -e ADMIN_ID=123456789 \
+   -e SITE=your-website \
+   neurobalbes-discord
+   ```
+  
 ## Commands
 
 - **/help** - Shows available commands

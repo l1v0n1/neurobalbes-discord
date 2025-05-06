@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  neurobalbes-bot:
+    image: kuperdot/neurobalbes-discord:latest
+    container_name: neurobalbes-bot
+    volumes:
+      - type: bind
+      - balbes-data:/app/data
+    environment:
+      BOT_TOKEN: your-bot-token
+      PREFIX: /
+      BOT_DESCRIPTION: 'Neurobalbes | Type /help for commands'
+      CLIENT_ID: your-bot-client-id
+      RAW_LIMIT: 2000
+      INVITE_LINK: your-invite-link
+      SERVER_LINK: your-server-link
+      ADMIN_ID: 123456789 # Replace with your discord user ID
+      SITE: https://www.youtube.com/watch?v=dQw4w9WgXcQ # Replace with your site URL
+    command: ["npm", "start"]
+
+volumes:
+  balbes-data:

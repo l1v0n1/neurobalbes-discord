@@ -29,7 +29,6 @@ let config = {
 	clientId: process.env.CLIENT_ID,
 	raw_limit: parseInt(process.env.RAW_LIMIT || '2000', 10)
 };
-
 try {
 	const userConfig = await import('../../config.json', { with: { type: 'json' } });
 	config = { ...config, ...userConfig.default };

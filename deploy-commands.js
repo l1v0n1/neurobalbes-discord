@@ -75,32 +75,34 @@ async function loadCommands() {
 }
 
 async function deploy() {
-	await loadCommands(); // Wait for commands to be loaded
+    await loadCommands(); // Wait for commands to be loaded
 
-	if (commands.length === 0) {
-		console.log('No valid commands found to deploy.');
-		return;
-	}
+    if (commands.length === 0) {
+        console.log('No valid commands found to deploy.');
+        process.exit(0); // Exit gracefully if no commands are found
+    }
 
-	// Construct and prepare an instance of the REST module
-	const rest = new REST({ version: '10' }).setToken(token);
+    // Construct and prepare an instance of the REST module
+    const rest = new REST({ version: '10' }).setToken(token);
 
-	// Deploy the commands
-	try {
-		console.log(`
+    // Deploy the commands
+    try {
+        console.log(`
 Started refreshing ${commands.length} application (/) commands globally.`);
 
-		// The put method is used to fully refresh all commands
-		const data = await rest.put(
-			Routes.applicationCommands(clientId),
-			{ body: commands },
-		);
+        // The put method is used to fully refresh all commands
+        const data = await rest.put(
+            Routes.applicationCommands(clientId),
+            { body: commands },
+        );
 
-		console.log(`Successfully reloaded ${data.length} application (/) commands globally.`);
-	} catch (error) {
-		console.error('\nError deploying commands:');
-		console.error(error);
-	}
+        console.log(`Successfully reloaded ${data.length} application (/) commands globally.`);
+        process.exit(0); // Exit successfully after deployment
+    } catch (error) {
+        console.error('\nError deploying commands:');
+        console.error(error);
+        process.exit(1); // Exit with an error code if deployment fails
+    }
 }
 
-deploy(); // Execute the deployment function 
+deploy(); // Execute the deployment function
