@@ -12,7 +12,8 @@
     "stop:pm2": "pm2 stop neurobalbes",
     "restart:pm2": "pm2 restart neurobalbes",
     "logs:pm2": "pm2 logs neurobalbes",
-    "check-install": "node install-test.js"
+    "check-install": "node install-test.js",
+    "voice:install": "npm install @discordjs/voice @discordjs/opus ffmpeg-static libsodium-wrappers"
   },
   "repository": {
     "type": "git",
@@ -28,9 +29,13 @@
   "author": "l1v0n1",
   "license": "MIT",
   "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.18.0",
     "canvas": "^2.11.2",
     "discord-hybrid-sharding": "^2.2.6",
     "discord.js": "^14.19.1",
+    "ffmpeg-static": "^5.2.0",
+    "libsodium-wrappers": "^0.7.15",
     "node-fetch": "^3.3.2",
     "pm2": "^5.3.1",
     "sqlite": "^5.1.1",

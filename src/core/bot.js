@@ -294,7 +294,7 @@ async function loadCommands() {
 			if (!file.endsWith('.js')) continue;
 			const filePath = path.join(commandsPath, file);
 			const commandName = file.split('.')[0];
-			logger.info(`Loading command file: ${filePath}`);
+			// logger.info(`Loading command file: ${filePath}`); // Suppressed verbose command loading log
 
 			try {
 				// Convert file path to URL for dynamic import
@@ -307,13 +307,13 @@ async function loadCommands() {
 					continue;
 				}
 				const command = commandModule.default;
-				logger.info(`Command module properties: ${Object.keys(commandModule).join(', ')}`);
-				logger.info(`Command default export keys: ${Object.keys(command).join(', ')}`);
+				// logger.info(`Command module properties: ${Object.keys(commandModule).join(', ')}`); // Suppressed verbose command loading log
+				// logger.info(`Command default export keys: ${Object.keys(command).join(', ')}`); // Suppressed verbose command loading log
 
 				// Check for essential properties
 				if ('data' in command && 'execute' in command) {
 					client.commands.set(command.data.name, command);
-					logger.info(`Loaded command: ${command.data.name}`);
+					// logger.info(`Loaded command: ${command.data.name}`); // Suppressed verbose command loading log
 				} else {
 					logger.warn(`Skipping command file ${file}: Missing required "data" or "execute" property in default export.`);
 				}
@@ -746,12 +746,12 @@ async function main() {
 			// For now, log critically and let existing logic handle exit if needed
 		});
 
-		logger.info('Starting main initialization...');
+		// logger.info('Starting main initialization...'); // Suppressed verbose startup log
 
 		// Load commands first
-		logger.info('Loading commands...');
+		// logger.info('Loading commands...'); // Suppressed verbose startup log
 		await loadCommands();
-		logger.info('Command loading complete.');
+		// logger.info('Command loading complete.'); // Suppressed verbose startup log
 
 		// Validate token before attempting login
 		if (!config.token || config.token === 'YOUR_TOKEN_HERE') {
@@ -760,9 +760,9 @@ async function main() {
 		}
 
 		// Then login with better error handling
-		logger.info(`Attempting to log in to Discord...`);
+		// logger.info(`Attempting to log in to Discord...`); // Suppressed verbose startup log
 		await client.login(config.token);
-		logger.info(`Successfully logged in! Waiting for client to be ready...`);
+		// logger.info(`Successfully logged in! Waiting for client to be ready...`); // Suppressed verbose startup log
 
 		// Set a timeout to exit if the ready event never fires
 		const readyTimeout = setTimeout(() => {
@@ -777,7 +777,7 @@ async function main() {
 			// Put any post-ready initialization here if needed
 		});
 
-		logger.info('Main initialization sequence complete, event handlers are active.');
+		// logger.info('Main initialization sequence complete, event handlers are active.'); // Suppressed verbose startup log
 
 	} catch (error) {
 		logger.error(`[CRITICAL] Failed to initialize bot in main function:`, error);

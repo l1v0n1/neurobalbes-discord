@@ -19,6 +19,9 @@ An advanced Discord bot using Markov chains for message generation.
    ```
    npm run voice:install
    ```
+   This command installs the required dependencies for voice features: `@discordjs/voice`, `@discordjs/opus`, and `ffmpeg-static`.
+   
+   If you encounter errors, ensure you have Python and a C++ build toolchain installed (see prerequisites below). For troubleshooting, see the "Voice Features Troubleshooting" section at the end of this README.
 
 4. Create a config.json file:
    ```json

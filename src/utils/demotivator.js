@@ -72,24 +72,50 @@ export async function demotivatorImage(imageUrl, title, text) {
       photoHeight
     );
     
-    // Draw title
+    // --- TEXT WRAPPING UTILS ---
+    function wrapText(ctx, text, maxWidth, font) {
+      ctx.font = font;
+      const words = text.split(' ');
+      let lines = [];
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n > 0) {
+          lines.push(line.trim());
+          line = words[n] + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      lines.push(line.trim());
+      return lines;
+    }
+
+    // --- TITLE DRAW (with wrapping, динамическое позиционирование) ---
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px Times New Roman';
+    const titleFont = 'bold 32px Times New Roman';
+    ctx.font = titleFont;
     ctx.textAlign = 'center';
-    ctx.fillText(
-      title.toUpperCase(), 
-      canvasWidth / 2, 
-      padding + photoMargin + photoHeight + 40
-    );
-    
-    // Draw text
-    ctx.font = '20px Times New Roman';
-    ctx.fillText(
-      text, 
-      canvasWidth / 2, 
-      padding + photoMargin + photoHeight + 40 + 30
-    );
-    
+    const titleLines = wrapText(ctx, title.toUpperCase(), canvasWidth - 80, titleFont);
+    const titleLineHeight = 38;
+    // Новый расчёт: titleStartY теперь всегда минимум на 30px ниже картинки + белый отступ
+    const minTitleOffset = 60;
+    const titleStartY = padding + photoMargin + photoHeight + minTitleOffset;
+    titleLines.forEach((line, i) => {
+      ctx.fillText(line, canvasWidth / 2, titleStartY + i * titleLineHeight);
+    });
+
+    // --- TEXT DRAW (with wrapping) ---
+    const textFont = '20px Times New Roman';
+    ctx.font = textFont;
+    const textLines = wrapText(ctx, text, canvasWidth - 80, textFont);
+    const textStartY = titleStartY + titleLines.length * titleLineHeight + 10;
+    const textLineHeight = 27;
+    textLines.forEach((line, i) => {
+      ctx.fillText(line, canvasWidth / 2, textStartY + i * textLineHeight);
+    });
+
     // Return the buffer
     return canvas.toBuffer();
   } catch (error) {
